@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Democracy Command</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@400;600;700;800&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- bump ?v= on every release so browsers fetch fresh files instead of cached ones -->
+  <link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+  <canvas id="map" aria-label="Galactic war map"></canvas>
+
+  <div id="ui" hidden>
+    <section id="tl" class="hud">
+      <div class="crest" aria-hidden="true"></div>
+      <div class="tl-head">
+        <h1 id="region-name">GALACTIC WAR</h1>
+        <div id="region-sub" class="sub"></div>
+        <div class="libbar"><i id="region-bar"></i><b id="region-bar-enemy"></b></div>
+        <div id="region-pct" class="pct"></div>
+      </div>
+      <dl id="warstats" class="warstats"></dl>
+    </section>
+
+    <section id="tc" class="hud">
+      <div class="clock-row">
+        <div id="clock" class="clock"></div>
+        <div class="speed" role="group" aria-label="Game speed">
+          <button id="sp0" data-speed="0" title="Pause (Space)">❚❚</button>
+          <button id="sp1" data-speed="1" title="Normal speed">▶</button>
+          <button id="sp2" data-speed="2" title="Fast">▶▶</button>
+          <button id="sp3" data-speed="4" title="Fastest">▶▶▶</button>
+        </div>
+      </div>
+      <div class="director" id="director" title="The AI Director paces the war. It escalates when you are comfortable and eases off when you are struggling.">
+        <span class="dlabel">WAR INTENSITY</span>
+        <span id="dir-phase" class="dphase"></span>
+        <div class="dmeter"><i id="dir-fill"></i><b id="dir-target"></b></div>
+        <div id="dir-intent" class="dintent"></div>
+      </div>
+      <div id="arc-meter" class="arc-meter" hidden></div>
+    </section>
+
+    <section id="tr">
+      <nav class="topbtns">
+        <button id="btn-research" class="tb"><kbd>R</kbd>RESEARCH</button>
+        <button id="btn-stats" class="tb"><kbd>S</kbd>WAR RECORD</button>
+        <button id="btn-dispatch" class="tb"><kbd>D</kbd>DISPATCHES <span id="dispatch-count" class="cnt">0</span></button>
+        <button id="btn-menu" class="tb icon" title="Menu (Esc)">☰</button>
+      </nav>
+      <div id="resources" class="hud res"></div>
+      <div id="mo" class="hud mo"></div>
+      <div id="arcs"></div>
+    </section>
+
+    <section id="card" class="hud card" hidden></section>
+
+    <section id="cmd" class="cmd" aria-label="Commander actions"></section>
+
+    <section id="feed" class="hud feed" aria-live="polite"></section>
+
+    <div id="toasts" aria-live="polite"></div>
+    <div id="tip" class="tip" hidden></div>
+    <div id="target-hint" class="target-hint" hidden></div>
+  </div>
+
+  <div id="modal" class="modal" hidden><div id="modal-box" class="box" role="dialog" aria-modal="true"></div></div>
+
+  <div id="title" class="title-screen">
+    <div class="title-inner">
+      <div class="eagle" aria-hidden="true"></div>
+      <p class="kicker">SUPER EARTH HIGH COMMAND · STRATEGIC LIBERATION INTERFACE</p>
+      <h1 class="logo">DEMOCRACY<br><span>COMMAND</span></h1>
+      <p class="lede">You are not a Helldiver. You are the officer who decides where a hundred thousand of them drop. Issue Major Orders, move the fleet, call orbital strikes, fund research and keep the public cheering, while an AI Director writes the war around you.</p>
+      <div id="title-body"></div>
+    </div>
+  </div>
+
+  <script src="js/util.js?v=1"></script>
+  <script src="js/data.js?v=1"></script>
+  <script src="js/galaxy.js?v=1"></script>
+  <script src="js/sim.js?v=1"></script>
+  <script src="js/llm.js?v=1"></script>
+  <script src="js/director.js?v=1"></script>
+  <script src="js/render.js?v=1"></script>
+  <script src="js/audio.js?v=1"></script>
+  <script src="js/charts.js?v=1"></script>
+  <script src="js/ui.js?v=1"></script>
+  <script src="js/main.js?v=1"></script>
+</body>
+</html>

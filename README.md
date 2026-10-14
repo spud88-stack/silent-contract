@@ -71,3 +71,27 @@ The key is stored only in your browser's localStorage and is sent only to openro
 | `js/render.js` | Lighting, fog of war, vision cones, instinct |
 | `js/campaign.js` | Freelancer meta and save data |
 | `js/sprites.js` | Procedural pixel art |
+
+---
+
+# Democracy Command
+
+A second game in this repo: a Helldivers-inspired galactic war strategy game where you play the Democracy Officer at Super Earth High Command, not a Helldiver.
+
+**[▶ Play Democracy Command](https://spud88-stack.github.io/silent-contract/democracy-command/)** (or open `democracy-command/index.html` locally).
+
+- **Galactic war map.** Concentric rings of sectors around Super Earth, hatched in the colours of the Terminids, Automatons and Illuminate. Procedural planets rotate, supply lines pulse along the front, and invasions march in as animated chevrons.
+- **You command, they choose.** About 64,000 Helldivers pick their own fronts. You steer them with Major Orders, priority flags and the Super Destroyer fleet, and support them with orbital bombardments, SEAF battalions, planetary fortifications, propaganda broadcasts and Hellbombs.
+- **Liberation vs. regeneration.** Every campaign shows its net rate per hour. Enemies invade worlds that border theirs, and you have to reach 100% before the defense timer runs out.
+- **Research, morale and requisition.** Thirteen research projects paid for with requisition and common, rare and super samples. If public morale collapses, or Super Earth falls, you lose. Liberate all three enemy homeworlds to win.
+- **AI Game Director.** Paces the war through lulls, build-ups, crises and aftermaths, escalating when you're comfortable and easing off when you're struggling. It runs multi-stage story arcs: the Meridian Singularity, Terminid outbreaks, the Gloom, Automaton superweapons, SEAF evacuations, counteroffensives, and a named hero whose legend ends in a choice you make. It also fires random events that come with real dilemmas.
+- **Living AI (optional).** With an OpenRouter key (shared with Silent Contract), the Director invents new events with real game effects and writes Ministry of Truth dispatches about your war. Every effect the model proposes is validated and clamped before it's applied.
+- **War Record.** Charts of worlds held and morale over time, kills by faction, heroes, and a full war chronicle.
+
+| File | Purpose |
+|---|---|
+| `democracy-command/js/galaxy.js` | Sector rings, planets, supply lines |
+| `democracy-command/js/sim.js` | Helldiver allocation, campaigns, enemy offensives, economy, Major Orders |
+| `democracy-command/js/director.js` | Tension pacing, story arcs, events, dispatches, LLM event invention |
+| `democracy-command/js/render.js` | Canvas galactic map and effects |
+| `democracy-command/js/ui.js` | HUD, planet card, command bar, modals |
