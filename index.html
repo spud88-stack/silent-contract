@@ -26,7 +26,7 @@
       </div>
     </div>
     <div id="tr" class="panel">
-      <canvas id="minimap" width="132" height="100"></canvas>
+      <canvas id="minimap" width="264" height="200"></canvas>
       <div id="room"></div>
     </div>
     <div id="bl" class="panel">
@@ -40,19 +40,26 @@
     </div>
     <div id="bc">
       <div id="prompts"></div>
+      <div id="inv-desc"></div>
       <div id="inv-name"></div>
       <div id="inv"></div>
     </div>
     <div id="toasts"></div>
+    <div id="room-labels"></div>
+    <div id="chatter"></div>
     <div id="bubbles"></div>
     <div id="inspect" class="hidden"></div>
-    <div id="hint">TAB intel · M map · SPACE instinct · T talk · ESC pause</div>
+    <div id="hint">TAB intel · M map · SPACE instinct · T talk · Y say aloud · ESC pause</div>
     <div id="room-banner"><div class="rb-name"></div><div class="rb-tier"></div></div>
   </div>
 
   <div id="intel" class="panel hidden">
     <h2>INTEL</h2>
     <ul id="intel-list"></ul>
+    <h3>YOUR RUMORS</h3>
+    <ul id="intel-rumors"></ul>
+    <h3>OVERHEARD</h3>
+    <div id="intel-heard"></div>
     <button id="intel-close">Close [TAB]</button>
   </div>
 
@@ -60,6 +67,12 @@
     <div class="bm-head"><h2>SITE MAP</h2><div class="legend"><span class="t0">Public</span><span class="t1">Staff</span><span class="t2">Security</span><span class="t3">Private</span><span class="ex">Exit</span><span class="cam">Camera</span></div></div>
     <canvas id="bigmap-c"></canvas>
     <div class="dim">[M] close · Rooms you are not allowed in are outlined in red for your current disguise.</div>
+  </div>
+
+  <div id="saybox" class="hidden">
+    <div class="say-head"><span>SAY ALOUD</span><div class="vols"><button type="button" data-vol="whisper">🤫 Whisper</button><button type="button" data-vol="say">💬 Say</button><button type="button" data-vol="shout">📢 Shout</button></div><span id="say-count"></span></div>
+    <form id="say-form" autocomplete="off"><input id="say-input" maxlength="160" placeholder="Everyone nearby hears this… e.g. Free champagne in the Ballroom!"><button type="submit">Say ⏎</button><button type="button" id="say-cancel">Cancel</button></form>
+    <div class="dim">TAB changes volume · Shouting reaches far but draws attention · ESC cancels</div>
   </div>
 
   <div id="fade"></div>
@@ -74,6 +87,7 @@
       </div>
       <div class="dlg-side">
         <div id="dlg-ai"></div>
+        <div id="dlg-mood"></div>
         <div class="dlg-sus"><span>THEIR SUSPICION</span><div class="bar"><div id="dlg-susbar"></div></div></div>
       </div>
     </div>
@@ -96,6 +110,7 @@
   <script src="js/input.js"></script>
   <script src="js/npc.js"></script>
   <script src="js/talk.js"></script>
+  <script src="js/shout.js"></script>
   <script src="js/game.js"></script>
   <script src="js/render.js"></script>
   <script src="js/hud.js"></script>

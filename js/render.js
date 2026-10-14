@@ -145,6 +145,8 @@
   R.frame = function (G, realDt) {
     const VW = R.VW, VH = R.VH, P = G.P, m = G.map, t = G.time, In = SC.Input;
     const instinct = (G.instinct = !P.ghost && (In.down(' ') || In.down('v')) && !G.dialog);
+    // instinct eases in and out rather than snapping
+    G.instinctK = (G.instinctK || 0) + ((instinct ? 1 : 0) - (G.instinctK || 0)) * Math.min(1, realDt * 9);
     // camera
     let tx, ty;
     if (P.ghost) { tx = m.w * TS / 2 + Math.sin(t * 0.05) * m.w * 5; ty = m.h * TS / 2 + Math.sin(t * 0.083) * m.h * 4.5; }
@@ -264,6 +266,7 @@
         if (!seated) shadow(ctx, n.x - ox, n.y - oy);
         drawChar(ctx, n.sheet, n.x - ox, n.y - oy - (seated ? 3 : 0) - bob, seated ? Math.PI / 2 : n.dir, seated ? 0 : frameOf(n, t), n.state === 'cower' ? { squash: 0.86 } : seated ? { squash: 0.9 } : null);
         if (!n.moving && n.state === 'routine' && !n.path) heldProp(ctx, n, n.x - ox, n.y - oy, t);
+        if (n.state === 'talk' && G.dialog && G.dialog.npc === n && G.dialog.mode === 'phone') { ctx.fillStyle = '#181425'; ctx.fillRect(Math.round(n.x - ox) + 3, Math.round(n.y - oy) - 20, 3, 5); ctx.fillStyle = '#2ce8f5'; ctx.fillRect(Math.round(n.x - ox) + 4, Math.round(n.y - oy) - 19, 1, 2); }
         if (n.held) { ctx.fillStyle = 'rgba(228,59,68,0.5)'; ctx.fillRect(Math.round(n.x - ox - 6), Math.round(n.y - oy - 24), 12, 1); }
       } else if (e.player) {
         shadow(ctx, P.x - ox, P.y - oy, 6);
@@ -364,6 +367,32 @@
       ctx.drawImage(fog, 0, 0);
     }
 
+    // ---- instinct: access zones. Green = your disguise belongs here, red stripes = restricted
+    const ik = G.instinctK;
+    if (ik > 0.02 && !P.ghost) {
+      for (const r of m.rooms) {
+        const rx = (r.x + 1) * TS - ox, ry = (r.y + 1) * TS - oy, rw = (r.w - 2) * TS, rh = (r.h - 2) * TS;
+        if (rx > VW || ry > VH || rx + rw < 0 || ry + rh < 0) continue;
+        const ok = SC.MapGen.allowed(r, P.outfit.kind);
+        ctx.fillStyle = ok ? 'rgba(99,199,77,' + (0.1 * ik).toFixed(3) + ')' : 'rgba(228,59,68,' + (0.12 * ik).toFixed(3) + ')';
+        ctx.fillRect(rx, ry, rw, rh);
+        if (!ok) {
+          ctx.save(); ctx.beginPath(); ctx.rect(rx, ry, rw, rh); ctx.clip();
+          ctx.strokeStyle = 'rgba(228,59,68,' + (0.22 * ik).toFixed(3) + ')'; ctx.beginPath();
+          for (let d = -rh; d < rw; d += 8) { ctx.moveTo(rx + d, ry + rh); ctx.lineTo(rx + d + rh, ry); }
+          ctx.stroke(); ctx.restore();
+        }
+        ctx.strokeStyle = ok ? 'rgba(99,199,77,' + (0.45 * ik).toFixed(3) + ')' : 'rgba(255,85,96,' + (0.6 * ik).toFixed(3) + ')';
+        ctx.strokeRect(Math.round(rx) + 0.5, Math.round(ry) + 0.5, rw - 1, rh - 1);
+      }
+      for (const d of m.doors) {
+        if (!d.locked) continue;
+        const dx = d.x * TS - ox, dy = d.y * TS - oy;
+        if (dx < -16 || dy < -16 || dx > VW || dy > VH) continue;
+        ctx.strokeStyle = 'rgba(255,85,96,' + ik.toFixed(2) + ')'; ctx.strokeRect(dx + 1.5, dy + 1.5, 13, 13);
+      }
+    }
+
     // ---- instinct: silhouettes through walls
     if (instinct) {
       ctx.fillStyle = 'rgba(30,20,60,0.18)'; ctx.fillRect(0, 0, VW, VH);
@@ -392,6 +421,7 @@
       else if (n.state === 'talk' || n.state === 'chat') { if (Math.floor(t * 2) % 2 === 0) drawIcon(ctx, ix, iy, 'talk'); }
       else if (G.marks.has(n)) drawIcon(ctx, ix, iy, 'mark');
       if (n.enforcer && n.kind === P.outfit.kind && n.visible && !n.hostileKinds.has(P.outfit.kind)) drawIcon(ctx, ix + 7, iy + 4, 'dot');
+      if (instinct && G.rumors.some((r) => r.believers.has(n.id))) { ctx.fillStyle = '#181425'; ctx.fillRect(Math.round(ix) - 9, Math.round(iy) + 1, 5, 5); ctx.fillStyle = '#fee761'; ctx.fillRect(Math.round(ix) - 8, Math.round(iy) + 2, 3, 3); }
     }
     // action progress ring
     if (P.action) {
@@ -403,7 +433,7 @@
     G.hover = null;
     if (!P.ghost) {
       for (const n of G.npcs) {
-        if (n.state === 'gone' || !n.visible || n.hiddenIn) continue;
+        if (n.state === 'gone' || (!n.visible && !instinct) || n.hiddenIn) continue;
         if (Math.abs(In.mouse.wx - n.x) < 7 && In.mouse.wy > n.y - 22 && In.mouse.wy < n.y + 2) { G.hover = n; break; }
       }
       if (G.hover && !G.hover.body) { const n = G.hover; ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(Math.round(n.x - ox), Math.round(n.y - oy), 7, 3, 0, 0, 6.29); ctx.stroke(); }

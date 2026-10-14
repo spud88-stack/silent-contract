@@ -51,7 +51,7 @@ kbd { font-family: var(--px); font-size: 10px; background: #e8e4f0; color: #1814
 #sus.lvl-combat .eye, #sus.lvl-combat #sus-label { color: var(--red2); } #sus.lvl-combat #sus-fill { background: var(--red); }
 
 #tr { position: absolute; right: 14px; top: 14px; padding: 6px; }
-#minimap { width: 198px; height: 150px; image-rendering: pixelated; display: block; }
+#minimap { width: min(330px, 28vw); height: auto; aspect-ratio: 264 / 200; image-rendering: pixelated; display: block; }
 #room { font-family: var(--px); font-size: 10px; text-align: center; padding-top: 5px; letter-spacing: 1px; }
 #room.tres { color: var(--red2); }
 
@@ -77,7 +77,7 @@ kbd { font-family: var(--px); font-size: 10px; background: #e8e4f0; color: #1814
 .slot .k { position: absolute; left: 3px; top: 1px; font-family: var(--px); font-size: 8px; color: var(--dim); }
 .slot .n { position: absolute; right: 3px; bottom: 1px; font-family: var(--px); font-size: 9px; }
 
-#toasts { position: absolute; right: 14px; top: 200px; display: flex; flex-direction: column; gap: 5px; align-items: flex-end; width: 360px; }
+#toasts { position: absolute; right: 14px; top: calc(min(330px, 28vw) * 0.76 + 64px); display: flex; flex-direction: column; gap: 5px; align-items: flex-end; width: 360px; }
 .toast { background: var(--panel2); border-left: 3px solid #8b86a0; padding: 7px 11px; font-size: 12px; animation: tin .25s ease-out; transition: opacity .6s, transform .6s; max-width: 360px; }
 .toast.out { opacity: 0; transform: translateX(20px); }
 .toast.bad { border-color: var(--red); color: #ffd0d3; } .toast.good { border-color: var(--green); color: #d6ffd0; } .toast.warn { border-color: var(--amber); }
@@ -216,3 +216,44 @@ p .ico { width: 24px; height: 24px; }
 .ttypes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .tt { background: var(--panel2); border-left: 3px solid var(--red); padding: 8px 12px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .tt b { font-family: var(--px); font-size: 11px; letter-spacing: 1px; color: var(--ink); } .tt span { color: var(--dim); }
+
+#room-labels { position: absolute; inset: 0; overflow: hidden; }
+.rlabel { position: absolute; left: 0; top: 0; text-align: center; white-space: nowrap; text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000; pointer-events: none; }
+.rlabel b { display: block; font-family: var(--px); font-size: 11px; letter-spacing: 2px; font-weight: 400; }
+.rlabel span { display: block; font-family: var(--px); font-size: 8px; letter-spacing: 1px; margin-top: 2px; }
+.rlabel.ok b { color: #d6ffd0; } .rlabel.ok span { color: var(--green); }
+.rlabel.no b { color: #ffd0d3; } .rlabel.no span { color: var(--red2); }
+.toast.tip { border-color: #fee761; color: #fff6c8; background: rgba(40,34,14,.94); max-width: 380px; line-height: 1.45; }
+.toast.tip::before { content: 'TIP · '; font-family: var(--px); font-size: 9px; color: #fee761; }
+#inv-desc { font-size: 11px; color: var(--dim); max-width: 420px; text-align: center; }
+
+/* ---------- AI visibility */
+#chatter { position: absolute; right: 14px; bottom: 34px; width: min(380px, 34vw); display: flex; flex-direction: column; gap: 3px; }
+#chatter .ch-head { font-family: var(--px); font-size: 8px; letter-spacing: 2px; color: var(--dim); }
+.ch { background: rgba(14,12,24,.82); border-left: 2px solid #6a5ca8; padding: 4px 8px; font-size: 12px; line-height: 1.35; animation: tin .25s ease-out; }
+.ch b { color: #c9b8ff; margin-right: 4px; } .ch.radio { border-color: var(--amber); } .ch.radio b { color: var(--amber); }
+.ch i { color: var(--dim); font-style: normal; margin-right: 4px; font-size: 10px; }
+#intel h3 { color: var(--cyan); margin: 16px 0 6px; font-size: 11px; }
+#intel-heard { max-height: 30vh; overflow: auto; display: flex; flex-direction: column; gap: 3px; }
+.aibadge { font-family: var(--px); font-size: 8px; color: var(--cyan); letter-spacing: 1px; }
+.bubble.thought { background: rgba(30,26,52,.92); color: #cfc6ff; border-color: #6a5ca8; font-style: italic; font-size: 16px; }
+.bubble.thought::after { border-top-color: #6a5ca8; }
+.thought { color: #a79cf0; font-style: italic; font-size: 12px; margin: 2px 0 0 0; }
+.delta { font-family: var(--px); font-size: 8px; padding: 1px 4px; margin-left: 4px; letter-spacing: 1px; vertical-align: 1px; }
+.delta.up { background: #4a1820; color: var(--red2); } .delta.down { background: #183a20; color: var(--green); }
+#dlg-mood { font-family: var(--px); font-size: 10px; letter-spacing: 1px; margin-bottom: 8px; color: #e8e4f0; min-height: 12px; }
+#dialog.mode-phone { border-color: var(--cyan); } #dialog.mode-phone #dlg-mode { color: var(--cyan); }
+#dialog.mode-interrogate { border-color: var(--red); } #dialog.mode-interrogate #dlg-mode { color: var(--red2); }
+#dialog.mode-radio { border-color: var(--amber); }
+
+.sandbox { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; background: linear-gradient(90deg, rgba(44,232,245,.08), rgba(44,232,245,0)); border: 1px solid rgba(44,232,245,.25); padding: 12px 14px; margin-bottom: 8px; }
+.sandbox > div:first-child { display: flex; flex-direction: column; gap: 3px; max-width: 360px; } .sandbox b { font-family: var(--px); font-size: 13px; letter-spacing: 2px; color: var(--cyan); font-weight: 400; } .sandbox span { font-size: 12px; color: var(--dim); }
+.sb-themes { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; } .sb-themes button { font-size: 10px; padding: 7px 9px; }
+
+#saybox { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(620px, 94vw); background: rgba(12,10,22,.96); border: 1px solid var(--amber); box-shadow: 0 10px 40px rgba(0,0,0,.6); z-index: 6; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; animation: dlg .15s ease-out; }
+.say-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .say-head > span:first-child { font-family: var(--px); font-size: 11px; letter-spacing: 2px; color: var(--amber); }
+.vols { display: flex; gap: 4px; } .vols button { font-size: 10px; padding: 5px 8px; } .vols button.on { background: #4a3a14; border-color: var(--amber); color: #fff; }
+#say-count { font-size: 11px; color: var(--dim); margin-left: auto; }
+#say-form { display: flex; gap: 6px; }
+#say-input { flex: 1; background: #1a162c; border: 1px solid #3d3560; color: #fff; font-family: var(--mono); font-size: 14px; padding: 10px 12px; outline: none; } #say-input:focus { border-color: var(--amber); }
+#saybox .dim { font-size: 11px; }

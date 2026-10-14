@@ -52,12 +52,13 @@
 
   function campaignTab() {
     const D = C.data;
+    const sandbox = '<div class="sandbox"><div><b>Sandbox</b><span>Free play: pick any location, get a full kit, no risk to your campaign, gear or marks. Perfect for messing with the AI.</span></div><div class="sb-themes">' + Object.keys(SC.THEMES).map((k) => '<button data-act="sandbox" data-arg="' + k + '">' + THEME_ICON[k] + ' ' + SC.THEMES[k].label + '</button>').join('') + '</div></div>';
     if (!D.campaign) {
-      return '<h2>Choose a syndicate to dismantle</h2><p class="lead">Each syndicate runs four tiers of territories. Clear the contracts in a tier, then face its leader in a <b>Showdown</b> — find them among the suspects by their tells. Fail a contract and the remaining territories go on <b>alert</b>. Fail an alerted contract or a showdown and the campaign collapses.</p>' +
+      return sandbox + '<h2>Choose a syndicate to dismantle</h2><p class="lead">Each syndicate runs four tiers of territories. Clear the contracts in a tier, then face its leader in a <b>Showdown</b> — find them among the suspects by their tells. Fail a contract and the remaining territories go on <b>alert</b>. Fail an alerted contract or a showdown and the campaign collapses.</p>' +
         '<div class="cards">' + C.offers().map((o, i) => '<div class="card syn"><div class="kicker">' + SC.esc(o.type) + '</div><h3>' + SC.esc(o.name) + '</h3><p>' + SC.esc(o.blurb) + '</p><div class="dim">Operates in: ' + o.themes.map((t) => SC.THEMES[t].label).join(', ') + '</div><button class="big" data-act="pickSyn" data-arg="' + i + '">Hunt them</button></div>').join('') + '</div>';
     }
     const cp = D.campaign;
-    let h = '<div class="camp-head"><div><div class="kicker">' + SC.esc(cp.syn.type) + '</div><h2>' + SC.esc(cp.syn.name) + '</h2></div><div class="pips">' + [0, 1, 2, 3].map((i) => '<span class="pip ' + (i < cp.tier ? 'done' : i === cp.tier ? 'cur' : '') + '">' + (i < cp.tier ? '✕' : 'L' + (i + 1)) + '</span>').join('') + '</div></div>';
+    let h = sandbox + '<div class="camp-head"><div><div class="kicker">' + SC.esc(cp.syn.type) + '</div><h2>' + SC.esc(cp.syn.name) + '</h2></div><div class="pips">' + [0, 1, 2, 3].map((i) => '<span class="pip ' + (i < cp.tier ? 'done' : i === cp.tier ? 'cur' : '') + '">' + (i < cp.tier ? '✕' : 'L' + (i + 1)) + '</span>').join('') + '</div></div>';
     h += '<p class="lead">Tier ' + (cp.tier + 1) + ' of 4. ' + (C.open().length > 1 ? 'Clear territories in any order. The last one standing hosts the <b>Showdown</b>.' : '<b>Showdown.</b> The leader is hiding in plain sight among the suspects.') + '</p>';
     h += '<div class="cards terr">' + cp.territories.map((t) => {
       const sd = C.isShowdown(t), th = SC.THEMES[t.theme];
@@ -90,7 +91,7 @@
       '<div class="row"><button id="ai-save" class="big">Save</button><button id="ai-test">Test connection</button><button id="ai-clear" class="ghost">Remove key</button><span id="ai-status"></span></div>' +
       '<p class="dim">Your key is stored only in this browser (localStorage) and sent only to openrouter.ai. Requests are billed to your OpenRouter account. A fast, cheap model keeps conversations snappy.</p></div>' +
       '<h2>Audio</h2><div class="form"><label>Volume<input id="vol" type="range" min="0" max="1" step="0.05" value="' + SC.Audio.vol + '"></label><label class="chk"><input id="music" type="checkbox" ' + (SC.Audio.music ? 'checked' : '') + '> Music</label></div>' +
-      '<h2>Save data</h2><button class="ghost" data-act="wipe">Reset all progress</button>';
+      '<h2>Save data</h2><div class="row"><button class="ghost" data-act="resetTips">Show tutorial tips again</button><button class="ghost" data-act="wipe">Reset all progress</button></div>';
   }
   function bindSettings() {
     const st = (t, cls) => { $('ai-status').textContent = t; $('ai-status').className = cls || ''; };
@@ -154,18 +155,36 @@
     SC.G.toast(ms.showdown ? 'SHOWDOWN · find the leader by their tells' : 'Contract live · ' + t.name, 'info');
     setTimeout(() => SC.G && SC.G.toast('[TAB] intel · [M] map · [SPACE] instinct · [T] talk · hover people to inspect', 'info'), 2500);
   }
+  M.sandbox = function (theme) {
+    const r = new SC.RNG((Date.now() ^ (Math.random() * 1e9)) >>> 0), T = SC.THEMES[theme];
+    const types = Object.keys(SC.TARGET_TYPES), objs = Object.keys(SC.OBJECTIVES);
+    const ms = { sandbox: true, seed: r.int(1, 2e9), theme, name: r.pick(T.places), region: r.pick(T.regions), targets: r.int(1, 2), targetTypes: [r.pick(types), r.pick(types)], courier: true, weather: r.chance(0.35) ? 'rain' : null, objectives: r.take(objs, 3), tier: 0 };
+    const kit = [{ id: 'phone' }, { id: 'wire' }, { id: 'silenced', n: 7 }, { id: 'knife' }, { id: 'coin', n: 5 }, { id: 'lockpick' }, { id: 'lethal', n: 1 }, { id: 'emetic', n: 1 }];
+    fade(() => {
+      SC.Game.end(); hide();
+      SC.Game.start(ms, kit);
+      SC.G.map.name = ms.name; SC.G.map.region = ms.region;
+      M.activeLoadout = [];
+      SC.HUD.reset(); $('hud').classList.remove('hidden');
+      M.screen = 'mission'; M.paused = false;
+      SC.G.toast('SANDBOX · nothing you do here counts. Go wild.', 'info');
+    });
+  };
   M.missionOver = function (G) {
     if (SC.G !== G || !G.over || G.resultsShown) return;
     G.resultsShown = true;
     fade(() => { if (G.over) showResults(G); });
   };
   function showResults(G) {
-    const res = C.resolve(G, M.activeLoadout || []);
+    const res = G.mission.sandbox
+      ? { success: G.over.success, reason: G.over.reason, rating: C.rate(G), lines: G.mission.objectives.map((k) => ({ label: SC.OBJECTIVES[k].name, v: SC.OBJECTIVES[k].pay, ok: SC.OBJECTIVES[k].test(G.stats) })), earned: 0, xp: 0, gained: [], lost: [], sandbox: true }
+      : C.resolve(G, M.activeLoadout || []);
     $('hud').classList.add('hidden');
     SC.HUD.toggleIntel(G, false); SC.HUD.toggleMap(G, false);
     M.screen = 'results';
     const s = G.stats, mm = Math.floor(s.time / 60), ss = Math.floor(s.time % 60);
     let h = '<div class="results ' + (res.success ? 'win' : 'lose') + '"><div class="kicker">' + SC.esc(G.map.name) + '</div><h1>' + (res.success ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED') + '</h1>' + (res.rating ? '<div class="rating r-' + res.rating.split(' ')[0].toLowerCase() + '">' + res.rating + '</div>' : '') + '<p class="lead">' + SC.esc(res.reason) + '</p>';
+    if (res.sandbox) h += '<p class="dim">Sandbox run · nothing was earned or lost.</p>';
     if (res.success) {
       h += '<div class="ledger">' + res.lines.map((l) => '<div class="' + (l.ok === false ? 'miss' : '') + '"><span>' + (l.ok === undefined ? '' : l.ok ? '✔ ' : '✘ ') + SC.esc(l.label) + '</span><b>' + (l.ok === false ? '—' : '+' + l.v) + '</b></div>').join('') + '<div class="tot"><span>Total</span><b>' + money(res.earned) + '</b></div><div><span>Mastery XP</span><b>+' + res.xp + '</b></div></div>';
       if (res.gained.length) h += '<p>New gear on your wall: ' + res.gained.map((id) => icon(id) + ' ' + SC.ITEMS[id].name).join(', ') + '</p>';
@@ -190,7 +209,7 @@
     bind($('screen'));
   };
   const HOW = '<div class="how"><h2>How to play</h2><div class="cols"><div><h3>Controls</h3><table>' +
-    [['WASD', 'Move'], ['Shift', 'Run (noisy)'], ['C / Ctrl', 'Toggle sneak'], ['Mouse', 'Aim'], ['Left click', 'Use item in hand (attack / shoot / throw coin)'], ['Right click', 'Throw item in hand'], ['E / F', 'Contextual actions (doors, bodies, disguises, poison, hide…)'], ['Q', 'Subdue (from behind = silent)'], ['T', 'Talk — type anything'], ['1-8 / wheel', 'Select item'], ['G', 'Drop item'], ['Space / V (hold)', 'Instinct: see people through walls'], ['Tab', 'Intel & objectives'], ['M', 'Site map'], ['Esc', 'Pause']].map(([k, v]) => '<tr><td><kbd>' + k + '</kbd></td><td>' + v + '</td></tr>').join('') +
+    [['WASD', 'Move'], ['Shift', 'Run (noisy)'], ['C / Ctrl', 'Toggle sneak'], ['Mouse', 'Aim'], ['Left click', 'Use item in hand (attack / shoot / throw coin)'], ['Right click', 'Throw item in hand'], ['E / F', 'Contextual actions (doors, bodies, disguises, poison, hide…)'], ['Q', 'Subdue (from behind = silent)'], ['T', 'Talk — type anything'], ['1-8 / wheel', 'Select item'], ['G', 'Drop item'], ['Space / V (hold)', 'Instinct: see people through walls'], ['Tab', 'Intel, rumors & overheard log'], ['M', 'Site map'], ['R', 'Grab & interrogate (from behind)'], ['Y', 'Say something out loud to everyone nearby'], ['Phone / Radio', 'Hold it, left click to call or broadcast'], ['Esc', 'Pause']].map(([k, v]) => '<tr><td><kbd>' + k + '</kbd></td><td>' + v + '</td></tr>').join('') +
     '</table></div><div><h3>Staying invisible</h3><p><b>Disguises</b> grant access: Public &lt; Staff &lt; Security &lt; Private. The room name turns red when you are trespassing.</p><p><b>Enforcers</b> (white dot) know their crew and will see through a matching disguise.</p><p>The <b>suspicion meter</b> shows the most suspicious person watching you. Witnesses run to guards — stop them before they report, or your disguise is compromised.</p><p><b>Talk.</b> When caught, explain yourself. Lie. Send people on errands, tell them their boss wants them, lure targets somewhere quiet. People remember being lied to — and they gossip.</p><p><b>Listen.</b> Conversations nearby leak intel: routines, safe codes, keycard holders, the leader\'s tells.</p></div></div><div class="foot"><button class="big" data-act="closeHow">Got it</button></div></div>';
 
   const ACT = {
@@ -200,6 +219,7 @@
     howIn: () => { show(HOW, 'pause-s'); bind($('screen')); },
     closeHow: () => (M.screen === 'mission' ? M.pause(true) : M.screen === 'title' ? M.title() : M.safehouse()),
     tab: (k) => M.safehouse(k),
+    sandbox: (k) => M.sandbox(k),
     pickSyn: (i) => { C.startCampaign(C.offers()[+i]); M.safehouse('campaign'); },
     abandon: () => { if (confirm('Abandon this campaign? Progress on this syndicate is lost.')) { C.data.campaign = null; C.data.stats.campaignsLost++; C.store(); M.safehouse('campaign'); } },
     plan: (id) => M.plan(id),
@@ -209,6 +229,7 @@
     buy: (i) => { C.buy(C.shop()[+i]); M.safehouse('market'); },
     wipe: () => { if (confirm('Erase all progress, gear and marks?')) { C.wipe(); M.safehouse('campaign'); } },
     toSafehouse: () => M.safehouse('campaign'),
+    resetTips: () => { SC.HUD.resetTips(); alert('Tips will show again in your next contract.'); },
     resume: () => M.pause(false),
     abortMission: () => { M.pause(false); SC.Game.finish(false, 'You abandoned the contract.', true); },
   };
@@ -220,7 +241,7 @@
     const G = SC.G;
     if (G) {
       if (M.screen === 'mission' && !G.over) {
-        if (SC.Input.pressed('escape')) { if (G.dialog) SC.Talk.close(false); else M.pause(!M.paused); }
+        if (SC.Input.pressed('escape')) { if (G.dialog) SC.Talk.close(false); else if (G.sayBox) SC.Shout.close(); else M.pause(!M.paused); }
         if (SC.Input.pressed('tab')) SC.HUD.toggleIntel(G);
         if (SC.Input.pressed('m')) SC.HUD.toggleMap(G);
       }
@@ -240,6 +261,7 @@
     SC.Input.bind($('game'));
     SC.HUD.init();
     SC.Talk.bindUI();
+    SC.Shout.bindUI();
     window.addEventListener('pointerdown', () => SC.Audio.unlock(), { once: false });
     $('intel-close').onclick = () => SC.G && SC.HUD.toggleIntel(SC.G, false);
     M.title();

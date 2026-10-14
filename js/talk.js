@@ -33,7 +33,9 @@
     const tierName = ['a public area', 'a staff-only area', 'a restricted security area', 'a private, top-clearance area'];
     const facts = knownFacts(n);
     const held = P.weaponOut ? ' They are openly holding a weapon.' : '';
-    const sit = mode === 'trespass' ? 'You just stopped this person because they are somewhere they should not be.'
+    const sit = mode === 'phone' ? 'Your phone just rang. An unknown caller with a hidden number is talking to you. You cannot see them and do not know what they look like.'
+      : mode === 'interrogate' ? 'A stranger has grabbed you from behind in a chokehold and is whispering questions in your ear. You are in real danger. Depending on your courage you may cooperate, lie to save yourself, or try to scream for help (action "call_guards").'
+        : mode === 'trespass' ? 'You just stopped this person because they are somewhere they should not be.'
       : mode === 'enforcer' ? 'You just stopped this person: they wear the same uniform as you, but you know everyone on your crew and you have never seen this face.'
         : 'This person walked up and started talking to you while you were ' + (n.act || 'idle') + '.';
     return [
@@ -44,7 +46,9 @@
       'Gullibility ' + Math.round(n.persona.gull * 10) + '/10, courage ' + Math.round(n.persona.courage * 10) + '/10, loyalty to your employer ' + Math.round(n.persona.loyalty * 10) + '/10.' + (n.armed ? ' You are armed and responsible for security.' : ' You are unarmed.') + (n.hasKeycard ? ' You carry the master keycard.' : ''),
       'You are in: ' + (room ? room.name + ', ' + tierName[room.tier] : 'the grounds outside') + '. Your current suspicion of this stranger: ' + Math.round(n.sus) + '/100.',
       '',
-      'THE STRANGER: a bald man dressed as "' + P.outfit.name + '".' + held + ' ' + (allowed ? 'Someone dressed like that is normally allowed where they are standing.' : 'Someone dressed like that is NOT allowed where they are standing.') + (n.wary.has(P.outfit.kind) ? ' You have been warned that someone dressed like this has been lying to people tonight.' : '') + (n.liedTo ? ' This kind of stranger has already fooled you ' + n.liedTo + ' time(s) tonight; you are much harder to fool now.' : ''),
+      mode === 'phone' ? 'THE CALLER: an unknown voice on the phone.' + (n.calls > 1 ? ' This is the ' + n.calls + 'nd strange call you have had tonight, which is making you wary.' : '') + (n.liedTo ? ' Someone already fooled you tonight; you are much harder to fool now.' : '')
+        : mode === 'interrogate' ? 'THE ATTACKER: a bald man dressed as "' + P.outfit.name + '", holding you from behind.'
+          : 'THE STRANGER: a bald man dressed as "' + P.outfit.name + '".' + held + ' ' + (allowed ? 'Someone dressed like that is normally allowed where they are standing.' : 'Someone dressed like that is NOT allowed where they are standing.') + (n.wary.has(P.outfit.kind) ? ' You have been warned that someone dressed like this has been lying to people tonight.' : '') + (n.liedTo ? ' This kind of stranger has already fooled you ' + n.liedTo + ' time(s) tonight; you are much harder to fool now.' : ''),
       'SITUATION: ' + sit,
       '',
       'THINGS YOU KNOW (share public ones freely if asked; share GUARDED ones only if you genuinely trust or like them, or they give a convincing reason):',
@@ -55,7 +59,7 @@
       '',
       'React like a real person: believe, doubt, ask a follow-up, get annoyed, be charmed or scared. A plausible lie that fits their outfit and your personality should often work; an absurd one should not. You cannot verify claims without going to look. Keep "say" to 1-2 short spoken sentences.',
       '',
-      'JSON schema: {"say": string, "suspicion": integer from -40 to 40 (change in your suspicion), "action": one of ' + JSON.stringify(ACTIONS) + ', "room": string (room name, only for go_to), "rumor": string (a short claim you will now repeat to coworkers, else ""), "reveal": [indexes of THINGS YOU KNOW you just told them], "end": boolean}',
+      'JSON schema: {"say": string, "thought": string (your private inner thought right now, one short sentence the stranger cannot hear), "mood": one of ["calm","amused","annoyed","nervous","scared","angry","charmed","suspicious"], "suspicion": integer from -40 to 40 (change in your suspicion), "action": one of ' + JSON.stringify(ACTIONS) + ', "room": string (room name, only for go_to), "rumor": string (a short claim you will now repeat to coworkers, else ""), "reveal": [indexes of THINGS YOU KNOW you just told them], "end": boolean}',
       'Actions: none = keep talking. go_to = you leave for "room" because they convinced you that you are needed or something is wrong there. follow = you go with them. leave_post = you step away for a while. allow = you let them stay/pass. escort_out = you insist on walking them out. call_guards = you report them to security. attack = armed staff only, you draw your weapon. flee = you run. give_keycard = hand over your keycard (only if you carry one and are completely convinced). wait = you agree to stay exactly here.',
     ].filter((s) => s !== '').join('\n');
   }
@@ -73,7 +77,37 @@
       say: String(r.say || '...').slice(0, 240), suspicion: clamp(parseInt(r.suspicion, 10) || 0, -40, 40),
       action: ACTIONS.includes(r.action) ? r.action : 'none', room: r.room, rumor: r.rumor ? String(r.rumor).slice(0, 140) : '',
       reveal: Array.isArray(r.reveal) ? r.reveal : [], end: !!r.end,
+      thought: r.thought ? String(r.thought).slice(0, 160) : '', mood: MOODS[r.mood] ? r.mood : '', ai: true,
     };
+  }
+  const MOODS = { calm: '😐', amused: '😏', annoyed: '😒', nervous: '😰', scared: '😨', angry: '😠', charmed: '😊', suspicious: '🤨' };
+  // the built-in brain has no inner voice, so give it a plausible one
+  function innerVoice(res, n, mode) {
+    const a = res.action, d = res.suspicion;
+    const T2 = {
+      go_to: ['Better go see for myself.', "If that's true, I can't ignore it.", 'Ugh. Fine, I will check.'],
+      leave_post: ['A break sounds great right about now.', 'Nobody will notice if I slip off.'],
+      follow: ['Odd, but I will play along.', "Let's see where this goes."],
+      allow: ['Seems legit enough.', 'Not worth the paperwork.', 'Probably harmless.'],
+      escort_out: ["I'm not losing my job over this guy.", 'Rules are rules.'],
+      call_guards: ['Something is very wrong here.', 'Security needs to hear about this.'],
+      flee: ['I need to get away from this person.'],
+      give_keycard: ["I really shouldn't... but fine."],
+    }[a];
+    if (T2) return pick(T2);
+    if (mode === 'interrogate') return pick(n.persona.courage > 0.6 ? ['Stay calm. Wait for a chance to scream.', "I won't give him everything."] : ['Please, please just let me go.', "Tell him what he wants and maybe I live."]);
+    if (d >= 12) return pick(["Something's off about this one.", "That doesn't add up.", 'Why is he asking me this?']);
+    if (d <= -8) return pick(['Nice enough guy.', "He's alright.", 'Finally, someone friendly tonight.']);
+    return pick(['Hm.', 'Where is this going?', "I don't have time for this.", 'Weird night.']);
+  }
+  function moodOf(res, n, mode) {
+    if (mode === 'interrogate') return n.persona.courage > 0.6 ? 'angry' : 'scared';
+    if (res.action === 'call_guards' || res.action === 'attack') return 'angry';
+    if (res.action === 'flee') return 'scared';
+    if (res.suspicion >= 12 || n.sus > 60) return 'suspicious';
+    if (res.suspicion <= -8) return 'charmed';
+    if (res.suspicion > 4) return 'annoyed';
+    return 'calm';
   }
 
   // ------------------------------------------------------------ built-in rule brain (no API key needed)
@@ -89,7 +123,24 @@
     const challenge = d.mode !== 'chat';
     const boss = g.targets.some((x) => t.includes(x.last.toLowerCase()) || t.includes(x.first.toLowerCase()));
 
-    if (has('bribe', 'money', 'cash', ' pay ', '$', 'tip ', 'make it worth')) {
+    if (d.mode === 'interrogate') {
+      // fear does the talking; brave people may risk a scream
+      const brave = p.courage > 0.6 && Math.random() < 0.18 + d.turns * 0.08;
+      const cands = facts.map((f, i) => [f, i]).filter(([f]) => f.text && !g.intel.includes(f.text));
+      const words = t.split(/\W+/).filter((w) => w.length > 3);
+      cands.sort((a, b) => words.filter((w) => b[0].say.toLowerCase().includes(w)).length - words.filter((w) => a[0].say.toLowerCase().includes(w)).length);
+      if (brave) { out.say = pick(['HELP! SOMEBODY HELP ME!', 'GUARDS! GUA—']); out.action = 'call_guards'; out.suspicion = 40; }
+      else if (cands.length) { out.say = pick(['Okay, okay! ', "Don't hurt me! ", 'Please... '] ) + cands[0][0].say; out.reveal = [cands[0][1]]; }
+      else out.say = pick(["I don't know anything, I swear!", "I just work here! Please!", "I've told you everything!"]);
+      return out;
+    }
+    if (has('did you hear', 'heard that', 'rumor', 'rumour', 'apparently', 'word is', 'people are saying', 'everyone knows', 'i heard')) {
+      if (roll(0.62)) {
+        out.say = pick(['No way. Really?', "Seriously?! I have to tell someone.", "I knew something was going on!", "Oh, that's juicy."]);
+        out.rumor = text.replace(/^(did you hear|i heard|apparently|word is|people are saying|everyone knows)( that)?[,:]?\s*/i, '').replace(/\?$/, '').slice(0, 120);
+        out.suspicion = -3;
+      } else { out.say = pick(["Sounds like nonsense to me.", "I don't do gossip.", "Who told you that?"]); out.suspicion = 6; }
+    } else if (has('bribe', 'money', 'cash', ' pay ', '$', 'tip ', 'make it worth')) {
       if (roll(0.45 - p.loyalty * 0.4)) { out.say = pick(L.bribeYes); out.action = 'allow'; out.suspicion = -30; }
       else { out.say = pick(L.bribeNo); out.suspicion = 18; }
     } else if (has(' kill', 'shut up', 'idiot', 'stupid', 'hurt you', 'or else', 'moron', 'screw you', 'threat')) {
@@ -144,6 +195,11 @@
     } else {
       out.say = pick(["Hm. If you say so.", "Right...", "Okay?", "I'm not sure what you want from me.", "Uh-huh."]); out.suspicion = 3;
     }
+    if (d.mode === 'phone') {
+      if (out.action === 'follow') out.action = 'go_to';
+      if (out.action === 'escort_out' || out.action === 'allow') out.action = 'none';
+      if (d.turns >= 3 && out.action === 'none') { out.say += ' ' + pick(["I'm hanging up.", 'Wrong number, I think.']); out.end = true; }
+    }
     if (!challenge && d.turns >= 4 && out.action === 'none') { out.say += ' ' + pick(["Anyway, I've got to get back to it.", 'Look, I should go.']); out.end = true; }
     return out;
   }
@@ -153,21 +209,40 @@
     const g = G(), n = d.npc, P = g.P, AI = SC.AI;
     if (n.state === 'dead' || n.state === 'ko') return;
     const info = { outfit: P.outfit.name, kind: P.outfit.kind, text };
+    const before = n.sus;
     n.sus = clamp(n.sus + res.suspicion, 0, 100);
     let action = res.action;
+    if (d.mode === 'phone') {
+      if (action === 'follow' || action === 'escort_out' || action === 'allow' || action === 'wait' || action === 'give_keycard') action = 'none';
+      if (action === 'attack' || action === 'flee') action = 'call_guards';
+    }
+    if (d.mode === 'interrogate') {
+      if (action === 'call_guards' || action === 'attack' || action === 'flee') action = 'scream'; else if (action !== 'none') action = 'none';
+    }
     if (action === 'attack' && (!n.armed || n.sus < 75)) action = n.sus >= 55 ? 'call_guards' : 'escort_out';
-    if (action === 'call_guards' && n.sus < 50) action = d.mode === 'chat' ? 'none' : 'escort_out';
+    if (action === 'call_guards' && n.sus < 50 && d.mode !== 'phone') action = d.mode === 'chat' ? 'none' : 'escort_out';
     if (action === 'give_keycard' && !n.hasKeycard) action = 'none';
-    if (n.sus >= 100 && (action === 'none' || action === 'allow')) action = n.armed && !n.escorted ? 'escort_out' : 'call_guards';
-    if (d.mode !== 'chat' && d.turns >= 4 && action === 'none') action = n.sus < 45 ? 'allow' : 'escort_out';
-    pushLog(d, 'npc', res.say);
+    if (d.mode !== 'phone' && d.mode !== 'interrogate') {
+      if (n.sus >= 100 && (action === 'none' || action === 'allow')) action = n.armed && !n.escorted ? 'escort_out' : 'call_guards';
+      if (d.mode !== 'chat' && d.turns >= 4 && action === 'none') action = n.sus < 45 ? 'allow' : 'escort_out';
+    }
+    const thought = res.thought || innerVoice(Object.assign({}, res, { action }), n, d.mode);
+    const mood = res.mood || moodOf(Object.assign({}, res, { action }), n, d.mode);
+    d.mood = mood;
+    pushLog(d, 'npc', res.say, { thought, delta: Math.round(n.sus - before), mood, ai: !!res.ai });
     AI.say(n, res.say);
+    g.bubble(n, '💭 ' + thought, 3.4, 'thought');
     AI.remember(n, 'A stranger dressed as ' + P.outfit.name + ' said: "' + text.slice(0, 80) + '"');
     const facts = knownFacts(n);
-    for (const i of res.reveal) if (facts[i]) g.addIntel(facts[i], 'Told by ' + n.first);
+    let revealed = 0;
+    for (const i of res.reveal) if (facts[i]) { if (facts[i].text && !g.intel.includes(facts[i].text)) revealed++; g.addIntel(facts[i], 'Told by ' + n.first); }
+    if (d.mode === 'interrogate' && revealed) g.stats.interrogated = (g.stats.interrogated || 0) + 1;
     if (res.rumor) {
+      // a rumor you planted carries your fingerprints so its spread can be tracked
       const rr = findRoom(res.rumor) || findRoom(res.room);
-      AI.learn(n, { id: 'rumor:' + SC.hashStr(res.rumor), kind: 'rumor', say: res.rumor, room: rr ? rr.id : null }, true);
+      const f = { id: 'rumor:' + SC.hashStr(res.rumor), kind: 'rumor', say: res.rumor, room: rr ? rr.id : null, fromPlayer: true };
+      g.plantRumor(f);
+      AI.learn(n, f, true);
     }
     let after = null, end = res.end;
     // whoever else was closing in on the same confrontation defers to this one's call
@@ -185,7 +260,14 @@
         after = () => { if (n.armed) AI.engage(n); else { AI.toState(n, 'report'); n.reportKind = 'suspicious'; n.reportOutfit = P.outfit.kind; n.reportName = P.outfit.name; n.reportPos = { x: P.x, y: P.y }; } }; break;
       case 'flee': after = () => { AI.toState(n, 'flee'); n.reportKind = 'suspicious'; n.reportOutfit = P.outfit.kind; n.reportName = P.outfit.name; n.reportPos = { x: P.x, y: P.y }; }; break;
       case 'give_keycard': n.hasKeycard = false; g.give('keycard', 1); g.stats.talked++; end = true; break;
+      case 'scream':
+        d.screamed = true;
+        after = () => { n.held = false; G().noise(n.x, n.y, 160, 'thud'); AI.witness(n, 'attacking someone'); };
+        g.toast(n.first + ' broke free and screamed!', 'bad'); break;
     }
+    if (d.mode === 'phone' && (action === 'go_to' || action === 'leave_post')) g.stats.phoneLures = (g.stats.phoneLures || 0) + 1;
+    if (d.mode === 'phone' && action === 'call_guards') { after = () => { AI.toState(n, 'routine'); n.actT = 1; AI.say(n, 'Security? I just got the creepiest phone call.'); }; G().heat = Math.min(100, G().heat + 8); }
+    if (d.mode === 'interrogate' && d.turns >= 4 && !after) end = true;
     renderDialog();
     if (after || end) {
       d.closing = true; d.after = after;
@@ -194,11 +276,15 @@
   }
 
   // ------------------------------------------------------------ dialogue UI
-  function pushLog(d, who, text) { d.log.push({ who, text }); }
+  function pushLog(d, who, text, extra) { d.log.push(Object.assign({ who, text }, extra || {})); }
   function renderDialog() {
     const d = G().dialog; if (!d) return;
     const n = d.npc;
-    $('dlg-log').innerHTML = d.log.map((e) => '<div class="ln ' + e.who + '"><b>' + (e.who === 'you' ? 'You' : SC.esc(n.first)) + '</b> ' + SC.esc(e.text) + '</div>').join('') + (d.busy ? '<div class="ln npc typing"><b>' + SC.esc(n.first) + '</b> <i>. . .</i></div>' : '');
+    $('dlg-log').innerHTML = d.log.map((e) => '<div class="ln ' + e.who + '"><b>' + (e.who === 'you' ? 'You' : SC.esc(n.first)) + '</b> ' + SC.esc(e.text) +
+      (e.delta ? ' <span class="delta ' + (e.delta > 0 ? 'up' : 'down') + '">' + (e.delta > 0 ? '+' : '') + e.delta + ' suspicion</span>' : '') +
+      (e.thought ? '<div class="thought">' + (e.ai ? '<span class="aibadge">✦ AI</span> ' : '') + '💭 ' + SC.esc(e.thought) + '</div>' : '') + '</div>').join('') +
+      (d.busy ? '<div class="ln npc typing"><b>' + SC.esc(n.first) + '</b> <i>' + (SC.LLM.enabled() ? 'thinking' : '') + ' . . .</i></div>' : '');
+    $('dlg-mood').textContent = d.mood ? MOODS[d.mood] + ' ' + d.mood.toUpperCase() : '';
     $('dlg-log').scrollTop = 1e6;
     $('dlg-susbar').style.width = Math.round(n.sus) + '%';
     $('dlg-susbar').className = n.sus > 66 ? 'hi' : n.sus > 33 ? 'mid' : '';
@@ -208,9 +294,13 @@
   function chips(d) {
     const g = G(), rooms = g.map.rooms, n = d.npc;
     const other = pick(rooms.filter((r) => r.tier <= 1)).name, tgt = g.targets[0];
-    const list = d.mode !== 'chat'
+    const list = d.mode === 'interrogate'
+      ? [tgt ? 'Where is ' + tgt.name + ' right now?' : 'Who is in charge here?', "What's the code to the safe?", 'Who carries the master keycard?', 'Tell me something useful and you walk away.']
+      : d.mode === 'phone'
+        ? ["This is your manager. I need you in the " + other + ' right now.', "Security here. There's a gas leak reported in the " + other + '.', "It's reception — there's a delivery waiting for you at the front.", "Did you hear? The boss is firing people tonight."]
+        : d.mode !== 'chat'
       ? ["Sorry — I got lost looking for the restroom.", "Maintenance. I was sent to fix something in here.", "I'm new, it's my first day.", "My mistake. I'll leave right now."]
-      : ['Long night, huh?', tgt && !n.isTarget ? 'What do you know about ' + tgt.name + '?' : 'Heard any gossip tonight?', "There's a problem in the " + other + '. You should check it.', n.isTarget ? 'Come with me, there is something you need to see.' : 'Your supervisor wants you in the ' + other + '.', "Go take a break, I'll cover for you."];
+      : ['Long night, huh?', tgt && !n.isTarget ? 'What do you know about ' + tgt.name + '?' : 'Heard any gossip tonight?', 'Did you hear? ' + (tgt ? tgt.first : 'The boss') + ' is planning to sell this place.', "There's a problem in the " + other + '. You should check it.', n.isTarget ? 'Come with me, there is something you need to see.' : 'Your supervisor wants you in the ' + other + '.', "Go take a break, I'll cover for you."];
     $('dlg-chips').innerHTML = '';
     for (const c of list) {
       const b = SC.el('button', 'chip', SC.esc(c));
@@ -220,23 +310,29 @@
     }
   }
 
-  T.canTalk = (n) => !!TALKABLE[n.state] && !n.hostileKinds.has(G().P.outfit.kind) && !n.dying;
+  T.canTalk = (n) => !!TALKABLE[n.state] && !n.hostileKinds.has(G().P.outfit.kind) && !n.dying && !n.held;
   T.open = function (n, mode) {
     const g = G();
     if (g.dialog || g.over || !T.canTalk(n)) return false;
-    const d = (g.dialog = { npc: n, mode: mode || 'chat', log: [], busy: false, turns: 0 });
+    const d = (g.dialog = { npc: n, mode: mode || 'chat', log: [], busy: false, turns: 0, mood: '' });
     SC.Input.clear(); // keys held when the conversation starts must not keep walking you afterwards
     SC.AI.toState(n, 'talk'); n.talks++;
-    if (d.mode !== 'chat') n.sus = Math.min(n.sus, 72);
-    const opener = d.mode === 'chat' ? pick(n.sus > 40 ? SC.LINES.busy : SC.LINES.greet) : (g.lastBubble(n) || pick(d.mode === 'trespass' ? SC.LINES.trespass : SC.LINES.enforcer));
+    if (d.mode === 'trespass' || d.mode === 'enforcer') n.sus = Math.min(n.sus, 72);
+    if (d.mode === 'phone') { n.calls = (n.calls || 0) + 1; n.sus = 10 + n.calls * 12; }
+    if (d.mode === 'interrogate') { n.held = true; n.sus = 90; }
+    const opener = d.mode === 'phone' ? pick(['*ring ring* ...Hello? Who is this?', '*bzzz* Yeah, ' + n.first + ' speaking.', '*ring* Hello? This number is private...'])
+      : d.mode === 'interrogate' ? pick(['Wh— who are you?! Let go!', "Please don't hurt me!", 'You picked the wrong person, pal.'])
+        : d.mode === 'chat' ? pick(n.sus > 40 ? SC.LINES.busy : SC.LINES.greet) : (g.lastBubble(n) || pick(d.mode === 'trespass' ? SC.LINES.trespass : SC.LINES.enforcer));
     pushLog(d, 'npc', opener);
-    if (d.mode === 'chat') SC.AI.say(n, opener, 2);
+    if (d.mode === 'chat' || d.mode === 'phone' || d.mode === 'interrogate') SC.AI.say(n, opener, 2);
+    if (d.mode === 'phone') g.sfx('ring');
     $('dlg-portrait').src = SC.Sprites.portrait(n.look, 4);
     $('dlg-name').textContent = n.name;
     $('dlg-role').textContent = n.outfit.name + ' · ' + n.persona.traits.join(', ');
     $('dlg-ai').textContent = SC.LLM.enabled() ? 'AI: ' + SC.LLM.cfg.model.split('/').pop() : 'AI: built-in';
     $('dlg-ai').className = SC.LLM.enabled() ? 'on' : '';
-    $('dlg-mode').textContent = d.mode === 'chat' ? 'CONVERSATION' : d.mode === 'trespass' ? 'CAUGHT TRESPASSING — talk your way out' : 'DISGUISE QUESTIONED — talk your way out';
+    $('dlg-mode').textContent = { chat: 'CONVERSATION', phone: '📱 PHONE CALL — they cannot see you', interrogate: 'INTERROGATION — they may scream. Close to knock them out', trespass: 'CAUGHT TRESPASSING — talk your way out', enforcer: 'DISGUISE QUESTIONED — talk your way out' }[d.mode];
+    $('dialog').className = 'mode-' + d.mode;
     $('dialog').classList.remove('hidden');
     chips(d); renderDialog();
     $('dlg-input').value = '';
@@ -248,6 +344,7 @@
     const g = G(), d = g.dialog;
     text = (text || '').trim();
     if (!d || d.busy || d.closing || !text) return;
+    if (d.radio) return submitRadio(d, text);
     d.turns++; d.busy = true;
     pushLog(d, 'you', text);
     g.bubble(g.P, text, 2.5);
@@ -269,10 +366,17 @@
     const n = d.npc;
     g.dialog = null;
     $('dialog').classList.add('hidden');
+    if (d.radio) { SC.Input.clear(); $('dlg-input').blur(); return; }
     SC.Input.clear();
     $('dlg-input').blur();
+    if (d.mode === 'interrogate') {
+      if (d.after) d.after();
+      else if (n.state !== 'dead' && n.state !== 'ko') { n.held = false; SC.AI.down(n, false, 'fists'); }
+      return;
+    }
     if (n.state !== 'talk') return;
     if (d.after) d.after();
+    else if (d.mode === 'phone') { SC.AI.toState(n, 'routine'); n.actT = Math.max(n.actT, 2); SC.AI.say(n, pick(['Weird call.', 'Hello? ...They hung up.', 'Prank callers. Great.']), 2); }
     else if (d.mode !== 'chat' && !resolved) { SC.AI.toState(n, 'escort'); n.escortT = 11; n.cause = d.mode; n.warned = false; n.sus = Math.max(n.sus, 80); SC.AI.say(n, pick(SC.LINES.escort)); }
     else if (d.mode !== 'chat') { SC.AI.toState(n, 'escort'); n.escortT = 13; n.cause = d.mode; n.warned = false; }
     else { SC.AI.toState(n, 'routine'); n.actT = Math.max(n.actT, 2); if (!resolved) SC.AI.say(n, pick(SC.LINES.bye), 1.5); }
@@ -282,7 +386,8 @@
   function cannedLines(a, b) {
     const AI = SC.AI, L = SC.LINES;
     const fa = AI.shareable(a, b), fb = AI.shareable(b, a);
-    if (fa && Math.random() < 0.75) return [{ s: a, t: fa.say, fact: fa }, { s: b, t: pick(['Seriously?', 'No way.', "I hadn't heard that.", 'Huh. Good to know.', "You're kidding.", 'Keep that quiet.']) }].concat(fb && Math.random() < 0.5 ? [{ s: b, t: fb.say, fact: fb }] : []);
+    const phrase = (f) => (f.kind === 'rumor' ? pick(['Did you hear? ', 'Word is ', "Don't tell anyone, but "]) + f.say.charAt(0).toLowerCase() + f.say.slice(1).replace(/[.!]?$/, '.') : f.say);
+    if (fa && (fa.kind === 'rumor' || Math.random() < 0.75)) return [{ s: a, t: phrase(fa), fact: fa }, { s: b, t: pick(['Seriously?', 'No way.', "I hadn't heard that.", 'Huh. Good to know.', "You're kidding.", 'Keep that quiet.']) }].concat(fb && Math.random() < 0.5 ? [{ s: b, t: phrase(fb), fact: fb }] : []);
     const st = pick(L.smalltalk);
     return [{ s: a, t: AI.fmt(st[0]) }, { s: b, t: AI.fmt(st[1]) }];
   }
@@ -314,7 +419,7 @@
     const near = dist(a.x, a.y, g.P.x, g.P.y) < 230 && !g.P.ghost;
     if (SC.LLM.enabled() && SC.LLM.cfg.ambient && near && SC.LLM.inflight === 0 && g.time - T.lastAmbient > 7) {
       T.lastAmbient = g.time; c.pending = true;
-      llmLines(c).then((l) => { if (!c.lines) c.lines = l; }).catch(() => {}).finally(() => { c.pending = false; });
+      llmLines(c).then((l) => { if (!c.lines) { c.lines = l; c.ai = true; } }).catch(() => {}).finally(() => { c.pending = false; });
     } else c.lines = cannedLines(a, b);
   };
   T.update = function (dt) {
@@ -332,11 +437,79 @@
         const l = c.lines[c.i++];
         if (!l) { c.a.chatT = c.b.chatT = Math.min(c.a.chatT, 1.2); T.chats.splice(k, 1); continue; }
         AI.say(l.s, l.t, 3, l.fact);
+        G().hear(l.s, l.t, c.ai);
         if (l.facts) for (const f of l.facts) { AI.learn(c.a, f); AI.learn(c.b, f); if (dist(l.s.x, l.s.y, G().P.x, G().P.y) < 130) G().addIntel(f, 'Overheard'); }
         c.next = 3; c.a.chatT = c.b.chatT = 5;
       }
     }
   };
+
+  // fake orders over a stolen guard radio
+  async function radioReply(text) {
+    const g = G(), room = findRoom(text);
+    const used = g.radioUses || 0;
+    let res = null;
+    if (SC.LLM.enabled()) {
+      try {
+        const r = await SC.LLM.json([{ role: 'user', content: [
+          'You are the security team at ' + g.map.name + ' during ' + g.map.theme.event + ', listening on your radio channel.',
+          'An unfamiliar voice just broadcast this on the channel: "' + text + '"',
+          'Current alert level: ' + Math.round(g.heat) + '/100. Fake calls already heard tonight: ' + used + '.',
+          'Rooms: ' + g.map.rooms.map((x) => x.name).join(', ') + '.',
+          'Decide how the guards react. Plausible, procedural-sounding orders often work; strange ones get challenged.',
+          'Reply with JSON only: {"reply": short radio reply from one guard, "believed": boolean, "room": room name the guards head to or "", "guards": 1 to 3}',
+        ].join('\n') }], { max: 140 });
+        res = { reply: String(r.reply || 'Copy.').slice(0, 140), believed: !!r.believed, room: findRoom(r.room) || room, guards: clamp(parseInt(r.guards, 10) || 2, 1, 3), ai: true };
+      } catch (e) { /* fall through to the rule brain */ }
+    }
+    if (!res) {
+      const ok = !!room && Math.random() < 0.75 - used * 0.25 - g.heat / 250;
+      res = { reply: ok ? pick(['Copy that, moving to the ' + room.name + '.', 'Ten-four. En route to the ' + room.name + '.', 'Roger. Checking the ' + room.name + ' now.']) : room ? pick(['Who is this? Identify yourself.', "That's not a call sign I know. Who's on this channel?"]) : 'Say again? Which location?', believed: ok, room, guards: 2 };
+    }
+    return res;
+  }
+  T.openRadio = function () {
+    const g = G();
+    if (g.dialog || g.over) return;
+    if ((g.radioUses || 0) >= 2) { g.toast('The guards changed channels. The radio is useless now.', 'warn'); return; }
+    const look = g.map.theme.outfits.guard.look;
+    g.dialog = { radio: true, mode: 'radio', npc: { first: 'Dispatch', name: 'Security Channel', look, sus: g.heat, persona: { traits: [] }, outfit: { name: 'Guard Radio' } }, log: [{ who: 'npc', text: '*static* ...channel open. Speak as security.' }], busy: false, turns: 0, mood: '' };
+    SC.Input.clear();
+    $('dlg-portrait').src = SC.Sprites.portrait(Object.assign({ skin: '#d49a74', hairStyle: 0, hair: '#221c1f' }, look), 4);
+    $('dlg-name').textContent = 'Security Channel';
+    $('dlg-role').textContent = 'Every guard on site hears this. ' + (2 - (g.radioUses || 0)) + ' broadcast(s) left before they switch channel.';
+    $('dlg-ai').textContent = SC.LLM.enabled() ? 'AI: ' + SC.LLM.cfg.model.split('/').pop() : 'AI: built-in';
+    $('dlg-mode').textContent = '📻 GUARD RADIO — send them somewhere';
+    $('dialog').className = 'mode-radio';
+    const other = pick(g.map.rooms.filter((r) => r.tier <= 2)).name;
+    $('dlg-chips').innerHTML = '';
+    for (const c of ['All units, suspicious package reported in the ' + other + '. Respond.', 'Requesting backup in the ' + other + ', we have a fight.', 'Shift change. Report to the ' + other + ' for briefing.']) {
+      const b = SC.el('button', 'chip', SC.esc(c)); b.type = 'button'; b.onclick = () => { $('dlg-input').value = c; $('dlg-input').focus(); }; $('dlg-chips').appendChild(b);
+    }
+    $('dialog').classList.remove('hidden');
+    renderDialog(); $('dlg-input').value = ''; setTimeout(() => $('dlg-input').focus(), 30);
+    g.sfx('radio');
+  };
+  async function submitRadio(d, text) {
+    const g = G();
+    d.turns++; d.busy = true; pushLog(d, 'you', text); renderDialog();
+    const res = await radioReply(text);
+    if (G() !== g || g.dialog !== d) return;
+    d.busy = false;
+    g.radioUses = (g.radioUses || 0) + 1;
+    pushLog(d, 'npc', res.reply, { thought: res.believed ? 'The guards bought it.' : 'They are suspicious of the voice on the channel.', ai: res.ai });
+    g.hear({ first: 'RADIO', name: 'Radio' }, res.reply, res.ai, true);
+    if (res.believed && res.room) {
+      const guards = g.npcs.filter((n) => n.armed && !n.follow && (n.state === 'routine' || n.state === 'chat' || n.state === 'notice') && !n.isTarget)
+        .sort((a, b) => Math.hypot(a.x - res.room.cx * 16, a.y - res.room.cy * 16) - Math.hypot(b.x - res.room.cx * 16, b.y - res.room.cy * 16)).slice(0, res.guards);
+      for (const n of guards) SC.AI.errand(n, res.room, 24, { outfit: 'a voice on the radio', kind: 'radio', text });
+      g.toast(guards.length + ' guard' + (guards.length === 1 ? '' : 's') + ' heading to the ' + res.room.name, 'good');
+      g.stats.talked++;
+    } else { g.heat = Math.min(100, g.heat + 12); g.toast('The guards are suspicious of the radio call', 'warn'); }
+    renderDialog();
+    d.closing = true;
+    setTimeout(() => { if (G() === g && g.dialog === d) T.close(true); }, 1800);
+  }
 
   T.bindUI = function () {
     $('dlg-form').addEventListener('submit', (e) => { e.preventDefault(); const v = $('dlg-input').value; $('dlg-input').value = ''; T.submit(v); });

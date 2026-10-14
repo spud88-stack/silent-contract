@@ -15,6 +15,8 @@
     lockpick: { name: 'Lockpick', desc: 'Opens locked doors and safes. Reusable in-mission.', price: 450, tool: true, consumable: true, rarity: 'rare' },
     lethal: { name: 'Lethal Vial', desc: 'Poison a drink. Whoever sips it dies.', price: 900, stack: true, consumable: true, rarity: 'epic' },
     emetic: { name: 'Emetic Vial', desc: 'Poison a drink. The victim runs to the bathroom, alone.', price: 400, stack: true, consumable: true, rarity: 'rare' },
+    phone: { name: 'Burner Phone', desc: 'Call anyone you can see or have marked. They never see your face.', price: 700, persist: true, rarity: 'rare' },
+    radio: { name: 'Guard Radio', desc: 'Hear security chatter. Use it to broadcast fake orders to the guards (2 uses).', mission: true },
     keycard: { name: 'Master Keycard', desc: 'Opens every locked door here.', mission: true },
     package: { name: "Courier's Package", desc: 'Dirty money. Yours now.', mission: true },
   };
@@ -281,6 +283,10 @@
     talker: { name: 'Silver Tongue', desc: 'Talk your way out of a confrontation or talk someone into leaving their post.', pay: 450, test: (s) => s.talked > 0 },
     nocams: { name: 'No Recordings', desc: 'Leave no camera footage of yourself — or erase it.', pay: 400, test: (s) => !s.recorded },
     accident: { name: 'Tragic Accident', desc: 'Eliminate a target with an accident.', pay: 600, test: (s) => s.methods.includes('accident') },
+    rumor: { name: 'Rumor Mill', desc: 'Start a rumor that spreads to at least 5 people.', pay: 450, test: (s) => (s.rumorReach || 0) >= 5 },
+    phone: { name: 'Wrong Number', desc: 'Lure someone away with a phone call.', pay: 400, test: (s) => (s.phoneLures || 0) > 0 },
+    interrogate: { name: 'Hard Questions', desc: 'Interrogate someone and get intel out of them.', pay: 400, test: (s) => (s.interrogated || 0) > 0 },
+    crowd: { name: 'Crowd Control', desc: 'Get 3 or more people moving with one thing you say out loud (Y).', pay: 450, test: (s) => (s.crowdMoved || 0) >= 3 },
     hidden: { name: 'Tidy Up', desc: 'Hide every target body in a container.', pay: 400, test: (s) => s.targetsHidden },
   };
 

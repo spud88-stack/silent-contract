@@ -36,6 +36,8 @@
   }
   const FX = {
     ui: () => tone(880, 0.05, 'square', 0.05),
+    ring: () => { for (let i = 0; i < 2; i++) { tone(1320, 0.12, 'square', 0.05, null, null, ctx.currentTime + i * 0.25); tone(1660, 0.12, 'square', 0.04, null, null, ctx.currentTime + i * 0.25 + 0.06); } },
+    radio: () => { noise(0.3, 0.06, 2400, 0.6); tone(1000, 0.05, 'square', 0.04, null, null, ctx.currentTime + 0.3); },
     step: () => noise(0.04, 0.025, 420 + Math.random() * 200, 1.5),
     tick: () => tone(1200, 0.03, 'square', 0.03),
     pickup: () => { tone(660, 0.06, 'square', 0.06); tone(990, 0.08, 'square', 0.05, null, null, ctx.currentTime + 0.06); },

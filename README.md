@@ -26,6 +26,17 @@ Go to **Safehouse → AI & Settings**, paste an [OpenRouter](https://openrouter.
 
 Without a key, a built-in rule-based brain handles all of this.
 
+### Playing with the AI
+
+- **Mind reading.** Every reply shows the NPC's private thought, their mood, and how much your words raised or lowered their suspicion. Lines written by the LLM are marked ✦ AI.
+- **Overheard feed.** Conversations near you scroll by in the bottom right. Press TAB for the full transcript.
+- **Rumor mill.** Tell someone "Did you hear…?" and the rumor spreads from gossip to gossip. You can track how many people believe it, and believers show up in instinct.
+- **Say it out loud (Y).** Whisper, say or shout a line, and everyone in earshot reacts in their own way. Some believe you, some panic, some come to look, some laugh, and some call security. Crowds follow each other, so once a few people move, more join in.
+- **Burner phone.** Click anyone you can see, or anyone behind a wall while holding instinct, to call them. They never see your face.
+- **Interrogation.** Press R behind an unaware person to grab them and ask questions. Brave people might scream; everyone else is knocked out when you finish.
+- **Guard radio.** Dropped by guards. You hear security chatter, and you can broadcast up to two fake orders to send guards wherever you like.
+- **Sandbox.** Pick any location, get a full kit, and play with no campaign risk.
+
 The key is stored only in your browser's localStorage and is sent only to openrouter.ai.
 
 ## Systems

@@ -13,7 +13,7 @@
     SC.MapGen.bake(map);
     G = SC.G = {
       mission, map, rng: new SC.RNG(mission.seed ^ 0x5bd1e995), npcs: [], time: 0, heat: mission.alerted ? 30 : 0,
-      alarmKinds: new Set(), intel: [], bubbles: [], particles: [], decals: [], projectiles: [], timers: [], items: [],
+      alarmKinds: new Set(), intel: [], heard: [], rumors: [], bubbles: [], particles: [], decals: [], projectiles: [], timers: [], items: [],
       stats: { recorded: false, accidentsFound: 0, compromised: false, bodiesFound: 0, nonTargetKills: 0, kos: 0, disguiseChanges: 0, methods: [], shots: 0, safeOpened: false, courier: false, talked: 0, targetsHidden: false, time: 0 },
       blackout: 0, dialog: null, over: null, shake: 0, loot: 0, safeCode: false, marks: new Set(), tells: new Set(), prompts: [], status: {}, picked: [],
       targetsLeft: 0, objectiveDone: false, abortT: 0,
@@ -137,8 +137,26 @@
   const API = {
     los, path,
     roomAtPx(x, y) { const m = G.map, tx = Math.floor(x / TS), ty = Math.floor(y / TS); if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return null; const r = m.roomAt[I(tx, ty)]; return r >= 0 ? m.rooms[r] : null; },
-    bubble(e, text, dur) { G.bubbles = G.bubbles.filter((b) => b.e !== e); G.bubbles.push({ e, text, t: 0, dur: dur || 3 }); },
-    lastBubble(e) { const b = G.bubbles.find((q) => q.e === e); return b ? b.text : null; },
+    bubble(e, text, dur, cls) { G.bubbles = G.bubbles.filter((b) => b.e !== e || (b.cls || '') !== (cls || '')); G.bubbles.push({ e, text, t: 0, dur: dur || 3, cls }); },
+    lastBubble(e) { const b = G.bubbles.find((q) => q.e === e && !q.cls); return b ? b.text : null; },
+    // everything said near you (or over a stolen radio) goes into the overheard feed
+    hear(e, text, ai, radio) {
+      const P = G.P;
+      if (P.ghost || !text) return;
+      if (!radio && dist(e.x, e.y, P.x, P.y) > 150) return;
+      G.heard.push({ who: e.first || e.name, text, ai: !!ai, radio: !!radio, t: G.time, rt: performance.now() });
+      if (G.heard.length > 120) G.heard.shift();
+    },
+    plantRumor(f) {
+      if (!G.rumors.some((r) => r.id === f.id)) { G.rumors.push({ id: f.id, text: f.say, believers: new Set(), milestone: 0 }); G.toast('Rumor planted: "' + f.say + '"', 'intel'); }
+    },
+    rumorSpread(f, n) {
+      const r = G.rumors.find((q) => q.id === f.id);
+      if (!r) return;
+      r.believers.add(n.id);
+      G.stats.rumorReach = Math.max(G.stats.rumorReach || 0, r.believers.size);
+      for (const m of [3, 6, 10, 15]) if (r.believers.size >= m && r.milestone < m) { r.milestone = m; G.toast('Your rumor is spreading — ' + m + ' people believe "' + r.text + '"', 'intel'); G.sfx('intel'); }
+    },
     toast(text, cls) { SC.HUD && SC.HUD.toast(text, cls); },
     sfx(name) { SC.Audio && SC.Audio.play(name); },
     addIntel(f, via) {
@@ -360,7 +378,8 @@
   }
 
   function useHand() {
-    const P = G.P, it = P.inv[P.hand], def = SC.ITEMS[it.id];
+    const P = G.P; if (!P.inv[P.hand]) P.hand = 0;
+    const it = P.inv[P.hand], def = SC.ITEMS[it.id];
     if (it.id === 'fists') { const n = meleeTarget(22); if (n) subdue(n, false, 'fists'); return; }
     if (it.id === 'wire') { const n = meleeTarget(22); if (!n) return; if (!behind(n) && n.state !== 'talk') { G.toast('Get behind them to use the wire', 'warn'); return; } subdue(n, true, 'wire'); return; }
     if (it.id === 'knife' || it.id === 'wrench' || it.id === 'crowbar') {
@@ -401,6 +420,15 @@
       return;
     }
     if (it.id === 'coin') throwItem();
+    if (it.id === 'phone') {
+      const n = G.hover;
+      if (!n || n.body || !alive(n)) { G.toast('Point at someone you can see (or have marked) and click to call them', 'info'); return; }
+      if (n.calls >= 2) { G.toast(n.first + ' is ignoring unknown numbers now', 'warn'); return; }
+      if (!SC.Talk.canTalk(n)) { G.toast(n.first + " can't take a call right now", 'warn'); return; }
+      SC.Talk.open(n, 'phone');
+      return;
+    }
+    if (it.id === 'radio') SC.Talk.openRadio();
   }
 
   function throwItem() {
@@ -454,6 +482,7 @@
     if (npc) {
       if (SC.Talk.canTalk(npc) && !G.dialog) add('T', 'Talk to ' + npc.first + (npc.isTarget && !npc.suspect ? ' (TARGET)' : ''), () => SC.Talk.open(npc, 'chat'));
       if (dist(npc.x, npc.y, P.x, P.y) < 22) add('Q', (behind(npc) ? 'Subdue ' : 'Attack ') + npc.first, () => subdue(npc, false, 'fists'), !behind(npc));
+      if (dist(npc.x, npc.y, P.x, P.y) < 22 && behind(npc) && npc.state !== 'hunt' && SC.Talk.canTalk(npc) && !npc.isTarget) add('R', 'Grab & interrogate ' + npc.first, () => { SC.Talk.open(npc, 'interrogate'); G.sfx('struggle'); }, true);
     }
     // items on the floor
     let item = null, idist = 18;
@@ -548,7 +577,8 @@
       if (a.t >= a.dur) { P.action = null; a.done(); }
       return;
     }
-    if (G.dialog) return;
+    if (G.dialog) { if (G.dialog.mode === 'interrogate') setCrime('holding someone in a chokehold', 0.3); return; }
+    if (G.sayBox) return;
     buildPrompts();
     if (G.over) return;
     for (const p of G.prompts) {
@@ -560,6 +590,7 @@
     if (In.mouse.wheel) { P.hand = (P.hand + In.mouse.wheel + P.inv.length) % P.inv.length; G.sfx('tick'); }
     if (In.pressed('g') && P.hand > 0) { const x = P.inv[P.hand]; G.dropItem(x.id, P.x + Math.cos(P.dir) * 10, P.y + Math.sin(P.dir) * 6, { n: x.n }); P.inv.splice(P.hand, 1); P.hand = 0; G.sfx('drop'); }
     if (In.pressed('c') || In.pressed('control')) P.sneak = !P.sneak;
+    if (In.pressed('y')) { SC.Shout.open(); return; }
     // movement
     let mx = (In.down('d') || In.down('arrowright') ? 1 : 0) - (In.down('a') || In.down('arrowleft') ? 1 : 0);
     let my = (In.down('s') || In.down('arrowdown') ? 1 : 0) - (In.down('w') || In.down('arrowup') ? 1 : 0);
@@ -709,7 +740,7 @@
 
   Game.update = function (realDt) {
     if (!G) return;
-    const dt = Math.min(realDt, 0.05) * (G.dialog ? 0.12 : 1);
+    const dt = Math.min(realDt, 0.05) * (G.dialog || G.sayBox ? 0.12 : 1);
     if (!G.over) {
       G.time += dt; G.stats.time += dt;
       if (G.abortT > 0) G.abortT -= realDt;

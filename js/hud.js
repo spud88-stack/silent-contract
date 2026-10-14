@@ -10,7 +10,7 @@
   H.init = function () {
     mm = $('minimap'); mmx = mm.getContext('2d'); mmx.imageSmoothingEnabled = false;
   };
-  H.reset = function () { for (const k in cache) delete cache[k]; H.lastRoom = undefined; $('bigmap').classList.add('hidden'); $('bubbles').innerHTML = ''; $('toasts').innerHTML = ''; H.bubbleEls = new Map(); $('intel').classList.add('hidden'); };
+  H.reset = function () { $('chatter').innerHTML = ''; for (const k in cache) delete cache[k]; H.lastRoom = undefined; $('room-labels').innerHTML = ''; H.labelEls.clear(); $('bigmap').classList.add('hidden'); $('bubbles').innerHTML = ''; $('toasts').innerHTML = ''; H.bubbleEls = new Map(); $('intel').classList.add('hidden'); };
   H.bubbleEls = new Map();
 
   H.toast = function (text, cls) {
@@ -18,8 +18,9 @@
     const e = SC.el('div', 'toast ' + (cls || ''), SC.esc(text));
     box.prepend(e);
     while (box.children.length > 6) box.lastChild.remove();
-    setTimeout(() => e.classList.add('out'), cls === 'intel' ? 6500 : 4200);
-    setTimeout(() => e.remove(), cls === 'intel' ? 7200 : 4900);
+    const life = cls === 'tip' ? 10000 : cls === 'intel' ? 6500 : 4200;
+    setTimeout(() => e.classList.add('out'), life);
+    setTimeout(() => e.remove(), life + 700);
   };
 
   function objectivesHTML(G) {
@@ -47,12 +48,13 @@
     const lvlCls = ['clear', 'tres', 'sus', 'hunt', 'combat'][st.level];
     set('sus', 'className', 'lvl-' + lvlCls);
     $('sus-fill').style.width = Math.round(st.sus) + '%';
-    set('sus-sub', 'textContent', (st.seen ? st.seen + ' watching' : 'unseen') + (st.witness ? ' · ' + st.witness + ' witness' + (st.witness > 1 ? 'es' : '') + ' running' : '') + (G.heat > 5 ? ' · heat ' + Math.round(G.heat) : ''));
+    const esc = G.npcs.find((n) => n.state === 'escort');
+    set('sus-sub', 'textContent', esc ? 'BEING ESCORTED OUT · leave ' + (esc.cause === 'trespass' ? 'the restricted area' : 'their sight') + ' within ' + Math.max(0, Math.ceil(esc.escortT)) + 's' : (st.seen ? st.seen + ' watching' : 'unseen') + (st.witness ? ' · ' + st.witness + ' witness' + (st.witness > 1 ? 'es' : '') + ' running' : '') + (G.heat > 5 ? ' · heat ' + Math.round(G.heat) : ''));
     // objectives
     const key = G.targets.map((t) => t.state + (t.arriveAt != null ? Math.floor(t.arriveAt - G.time) : t.leaveAt != null ? Math.floor(t.leaveAt - G.time) : '')).join() + G.objectiveDone + [...G.tells].join();
     if (cache.obj !== key) { cache.obj = key; $('objectives').innerHTML = objectivesHTML(G); }
     set('loc', 'textContent', G.map.name.toUpperCase() + ' · ' + G.map.region);
-    set('room', 'textContent', (P.room ? P.room.name : 'Grounds') + (P.room ? ' · ' + ['Public', 'Staff', 'Security', 'Private'][P.room.tier] : ''));
+    set('room', 'textContent', (P.room ? P.room.name : 'Grounds') + (P.room ? ' · ' + ['Public', 'Staff', 'Security', 'Private'][P.room.tier] : '') + (P.trespass ? ' · needs ' + needs(G, P.room) : ''));
     set('room', 'className', P.trespass ? 'tres' : '');
     const rk = (P.room ? P.room.id : -1) + ':' + P.trespass;
     if (H.lastRoom !== rk) {
@@ -82,6 +84,7 @@
       $('inv').innerHTML = P.inv.map((it, i) => '<div class="slot ' + (i === P.hand ? 'sel' : '') + (SC.ITEMS[it.id].illegal ? ' illegal' : '') + '"><span class="k">' + (i + 1) + '</span><img src="' + SC.Sprites.iconURL(it.id) + '">' + (it.n != null ? '<span class="n">' + it.n + '</span>' : '') + '</div>').join('');
       const cur = P.inv[P.hand];
       set('inv-name', 'innerHTML', SC.esc(SC.ITEMS[cur.id].name) + (SC.ITEMS[cur.id].illegal ? ' <span class="flag bad">VISIBLE WEAPON</span>' : ''));
+      set('inv-desc', 'textContent', SC.ITEMS[cur.id].desc + (cur.id === 'phone' ? ' · Left click a person to call them — hold SPACE to call through walls.' : cur.id === 'radio' ? ' · Left click to broadcast.' : cur.id === 'fists' ? '' : SC.ITEMS[cur.id].gun ? ' · Left click to fire.' : ['coin', 'knife', 'wrench', 'crowbar'].includes(cur.id) ? ' · Left click to use, right click to throw.' : ''));
     }
     // prompts
     const pk = G.prompts.map((p) => p.key + p.text).join('|') + (P.action ? P.action.type : '');
@@ -89,32 +92,48 @@
       cache.pr = pk;
       $('prompts').innerHTML = P.action ? '' : G.prompts.map((p) => '<div class="prompt ' + (p.warn ? 'warn' : '') + (p.fn ? '' : ' off') + '">' + (p.fn ? '<kbd>' + p.key + '</kbd>' : '') + SC.esc(p.text) + '</div>').join('');
     }
-    // minimap
-    const m = G.map;
+    // minimap (drawn at 4px per tile so it stays crisp when scaled up)
+    const m = G.map, MS = 4;
     mmx.clearRect(0, 0, mm.width, mm.height);
-    mmx.drawImage(m.minimap, 0, 0);
-    mmx.fillStyle = 'rgba(255,255,255,0.12)';
-    mmx.fillRect(R.ox / 8, R.oy / 8, R.VW / 8, R.VH / 8);
+    mmx.drawImage(m.minimap, 0, 0, m.w * MS, m.h * MS);
+    if (P.room) { mmx.strokeStyle = P.trespass ? '#ff5560' : '#fee761'; mmx.lineWidth = 1; mmx.strokeRect((P.room.x + 1) * MS + 0.5, (P.room.y + 1) * MS + 0.5, (P.room.w - 2) * MS - 1, (P.room.h - 2) * MS - 1); }
+    mmx.strokeStyle = 'rgba(255,255,255,0.35)';
+    mmx.strokeRect(R.ox / 4 + 0.5, R.oy / 4 + 0.5, R.VW / 4, R.VH / 4);
+    for (const c of G.cams) if (!c.off) { mmx.fillStyle = c.sees ? '#ff2a3a' : 'rgba(255,60,80,0.6)'; mmx.fillRect(Math.round(c.x / 4) - 1, Math.round(c.y / 4) - 1, 2, 2); }
     for (const n of G.npcs) {
       if (n.state === 'gone' || n.hiddenIn) continue;
       const show = n.visible || G.marks.has(n) || G.instinct;
       if (!show) continue;
       mmx.fillStyle = n.body ? '#8b9bb4' : n.isTarget && !n.suspect ? '#ff3b4a' : n.suspect ? '#feae34' : n.state === 'hunt' ? '#ff7a3a' : n.armed ? '#7fb2ff' : '#e8e0f0';
-      const s = n.isTarget || G.marks.has(n) ? 3 : 2;
-      mmx.fillRect(Math.round(n.x / 8) - 1, Math.round(n.y / 8) - 1, s, s);
+      const sz = n.isTarget || G.marks.has(n) ? 5 : 3;
+      mmx.fillRect(Math.round(n.x / 4 - sz / 2), Math.round(n.y / 4 - sz / 2), sz, sz);
     }
-    if (Math.floor(G.time * 4) % 2 === 0 || true) { mmx.fillStyle = '#ffffff'; mmx.fillRect(Math.round(P.x / 8) - 1, Math.round(P.y / 8) - 2, 3, 3); mmx.fillStyle = '#e43b44'; mmx.fillRect(Math.round(P.x / 8), Math.round(P.y / 8) - 1, 1, 1); }
+    const px = Math.round(P.x / 4), py = Math.round(P.y / 4) - 2;
+    mmx.fillStyle = '#181425'; mmx.fillRect(px - 3, py - 3, 7, 7);
+    mmx.fillStyle = '#ffffff'; mmx.fillRect(px - 2, py - 2, 5, 5);
+    mmx.fillStyle = '#e43b44'; mmx.fillRect(px - 1, py - 1, 3, 3);
+    mmx.strokeStyle = '#ffffff'; mmx.beginPath(); mmx.moveTo(px + 0.5, py + 0.5); mmx.lineTo(px + 0.5 + Math.cos(P.dir) * 7, py + 0.5 + Math.sin(P.dir) * 7); mmx.stroke();
+    // overheard ticker: the last few lines spoken near you
+    const now = performance.now(), recent = G.heard.filter((h) => now - h.rt < 14000).slice(-5);
+    const ck = recent.map((h) => h.rt).join();
+    if (cache.chatter !== ck) {
+      cache.chatter = ck;
+      $('chatter').innerHTML = recent.length ? '<div class="ch-head">OVERHEARD</div>' + recent.map((h) => '<div class="ch' + (h.radio ? ' radio' : '') + '">' + (h.radio ? '📻 ' : '') + '<b>' + SC.esc(h.who) + '</b> ' + SC.esc(h.text) + (h.ai ? ' <span class="aibadge">✦</span>' : '') + '</div>').join('') : '';
+    }
+    if (Math.floor(G.time * 2) !== H.tipTick) { H.tipTick = Math.floor(G.time * 2); tips(G); }
+    // instinct: label each room with its access rule for your current disguise
+    roomLabels(G);
     // bubbles
     const live = new Set();
     for (const b of G.bubbles) {
       const e = b.e;
       if (e !== P && !e.visible) continue;
-      const scr = R.toScreen(e.x, e.y - 30);
+      const scr = R.toScreen(e.x, e.y - (b.cls === 'thought' ? 52 : 30));
       if (scr.x < -200 || scr.y < -60 || scr.x > innerWidth + 200 || scr.y > innerHeight + 60) continue;
       live.add(b);
       let el = H.bubbleEls.get(b);
       if (!el) {
-        el = SC.el('div', 'bubble' + (e === P ? ' me' : '') + (e.isTarget && !e.suspect ? ' tgt' : '') + (e.state === 'hunt' ? ' hostile' : ''), SC.esc(b.text));
+        el = SC.el('div', 'bubble' + (b.cls ? ' ' + b.cls : '') + (e === P ? ' me' : '') + (e.isTarget && !e.suspect && !b.cls ? ' tgt' : '') + (e.state === 'hunt' && !b.cls ? ' hostile' : ''), SC.esc(b.text));
         $('bubbles').appendChild(el); H.bubbleEls.set(b, el);
       }
       el.style.transform = 'translate(' + Math.round(scr.x) + 'px,' + Math.round(scr.y) + 'px) translate(-50%,-100%)';
@@ -141,6 +160,61 @@
     } else card.classList.add('hidden');
   };
 
+  const TIER_NAMES = ['PUBLIC', 'STAFF ONLY', 'SECURITY', 'PRIVATE'];
+  function needs(G, r) {
+    const th = G.map.theme;
+    // only the lowest-clearance outfits that work; anything above them works too
+    const ok = Object.keys(th.outfits).filter((k) => k !== 'civ' && SC.MapGen.allowed(r, k));
+    if (!ok.length) return '—';
+    const min = Math.min(...ok.map((k) => SC.OUTFIT_LEVEL[k]));
+    const names = ok.filter((k) => SC.OUTFIT_LEVEL[k] === min || (k === 'worker' && r.utility)).map((k) => th.outfits[k].name);
+    return names.join(' or ') + (min < 3 ? ' (or higher)' : '');
+  }
+  H.labelEls = new Map();
+  function roomLabels(G) {
+    const k = G.instinctK || 0, box = $('room-labels'), R = SC.Render, P = G.P;
+    if (k < 0.05) { if (box.childElementCount) { box.innerHTML = ''; H.labelEls.clear(); } return; }
+    const live = new Set();
+    for (const r of G.map.rooms) {
+      const scr = R.toScreen((r.x + r.w / 2) * 16, (r.y + 1) * 16 + 4);
+      if (scr.x < -120 || scr.y < -40 || scr.x > innerWidth + 120 || scr.y > innerHeight + 40) continue;
+      live.add(r);
+      let el = H.labelEls.get(r);
+      const ok = SC.MapGen.allowed(r, P.outfit.kind);
+      const key = r.id + ':' + ok + ':' + P.outfit.kind;
+      if (!el) { el = SC.el('div', 'rlabel'); box.appendChild(el); H.labelEls.set(r, el); }
+      if (el.dataset.key !== key) {
+        el.dataset.key = key;
+        el.className = 'rlabel ' + (ok ? 'ok' : 'no');
+        el.innerHTML = '<b>' + SC.esc(r.name) + '</b><span>' + TIER_NAMES[r.tier] + (ok ? ' · YOU FIT IN' : ' · NEEDS ' + SC.esc(needs(G, r).toUpperCase())) + '</span>';
+      }
+      el.style.transform = 'translate(' + Math.round(scr.x) + 'px,' + Math.round(scr.y) + 'px) translate(-50%,0)';
+      el.style.opacity = k.toFixed(2);
+    }
+    for (const [r, el] of H.labelEls) if (!live.has(r)) { el.remove(); H.labelEls.delete(r); }
+  }
+  // one-time tips the first time each mechanic comes up
+  let seenTips = {};
+  try { seenTips = JSON.parse(localStorage.getItem('sc_tips') || '{}'); } catch (e) { /* storage unavailable */ }
+  function tip(key, text) {
+    if (seenTips[key]) return;
+    seenTips[key] = 1;
+    try { localStorage.setItem('sc_tips', JSON.stringify(seenTips)); } catch (e) { /* storage unavailable */ }
+    H.toast(text, 'tip');
+  }
+  H.resetTips = () => { seenTips = {}; try { localStorage.removeItem('sc_tips'); } catch (e) { /* storage unavailable */ } };
+  function tips(G) {
+    const P = G.P, st = G.status;
+    if (G.time > 6) tip('instinct', 'Hold SPACE for instinct: see people through walls, and which rooms your disguise lets you into.');
+    if (P.trespass) tip('trespass', "You're somewhere your outfit doesn't belong. Guards will stop you. Find a disguise that fits, or talk your way out when caught.");
+    if (G.npcs.some((n) => n.visible && n.enforcer && n.kind === P.outfit.kind && n.state !== 'dead' && n.state !== 'ko')) tip('enforcer', 'A white dot marks an enforcer: they know their crew and will see through your matching disguise. Keep your distance.');
+    if (st.sus > 25) tip('sus', 'Someone is getting suspicious. The meter shows the most suspicious person watching you. Break line of sight to let it drop.');
+    if (G.npcs.some((n) => n.body && n.visible && !n.hiddenIn)) tip('body', 'Bodies get found. Press E to drag one, then stuff it in a locker, freezer or dumpster. Press F to take their clothes.');
+    if (G.intel.length) tip('intel', 'You picked up intel. Press TAB to review everything you have learned.');
+    if (G.npcs.filter((n) => n.visible && !n.body && Math.hypot(n.x - P.x, n.y - P.y) < 110).length >= 4) tip('shout', 'A crowd! Press Y to say something out loud. Everyone in earshot reacts in their own way. Try: "Free champagne in the Ballroom!"');
+    if (G.npcs.some((n) => n.visible && !n.body && n.state === 'routine' && Math.hypot(n.x - P.x, n.y - P.y) < 26)) tip('talk', 'Press T to talk to anyone. Type whatever you like: ask questions, lie, send them somewhere.');
+    if (st.witness) tip('witness', "A witness is running to tell the guards. Stop them before they arrive and your disguise stays clean.");
+  }
   H.toggleMap = function (G, show) {
     const el = $('bigmap');
     if (show === undefined) show = el.classList.contains('hidden');
@@ -188,5 +262,7 @@
     el.classList.toggle('hidden', !show);
     if (!show) return;
     $('intel-list').innerHTML = G.intel.length ? G.intel.map((t) => '<li>' + SC.esc(t) + '</li>').join('') : '<li class="dim">Nothing yet. Eavesdrop on conversations, or talk to people ([T]).</li>';
+    $('intel-rumors').innerHTML = G.rumors.length ? G.rumors.map((r) => '<li><b>' + r.believers.size + '</b> believe "' + SC.esc(r.text) + '"</li>').join('') : '<li class="dim">Start one: tell someone "Did you hear…?" Gossips spread rumors fastest.</li>';
+    $('intel-heard').innerHTML = G.heard.length ? G.heard.slice(-40).reverse().map((h) => '<div class="ch' + (h.radio ? ' radio' : '') + '"><i>' + Math.floor(h.t / 60) + ':' + String(Math.floor(h.t % 60)).padStart(2, '0') + '</i> ' + (h.radio ? '📻 ' : '') + '<b>' + SC.esc(h.who) + '</b> ' + SC.esc(h.text) + (h.ai ? ' <span class="aibadge">✦ AI</span>' : '') + '</div>').join('') : '<div class="dim">Stand near people who are chatting.</div>';
   };
 })();

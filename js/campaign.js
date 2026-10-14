@@ -6,13 +6,15 @@
   const KEY = 'sc_save_v1';
   const fresh = () => ({
     merces: 600, xp: 0, prestige: 0,
-    weapons: ['wire'], tools: { coin: 4, lockpick: 1, emetic: 1 },
+    weapons: ['wire', 'phone'], tools: { coin: 4, lockpick: 1, emetic: 1 }, gotPhone: true,
     campaign: null, offers: null, shop: null, lastLoadout: [],
     stats: { missions: 0, success: 0, deaths: 0, campaignsWon: 0, campaignsLost: 0, kills: 0, talked: 0 },
   });
   C.data = fresh();
   C.load = function () {
     try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) C.data = Object.assign(fresh(), s); } catch (e) { /* storage unavailable */ }
+    // older saves predate the burner phone: hand one over once
+    if (!C.data.gotPhone) { if (!C.data.weapons.includes('phone')) C.data.weapons.push('phone'); C.data.gotPhone = true; }
   };
   C.store = function () { try { localStorage.setItem(KEY, JSON.stringify(C.data)); } catch (e) { /* storage unavailable */ } };
   C.wipe = function () { C.data = fresh(); C.store(); };
@@ -105,16 +107,20 @@
   };
 
   // ---------------------------------------------------------------- results
+  C.rate = function (G) {
+    const s = G.stats;
+    return !G.over.success ? null
+      : SC.OBJECTIVES.silent.test(s) && s.kos === 0 && s.disguiseChanges === 0 ? 'GHOST'
+        : SC.OBJECTIVES.silent.test(s) ? 'SILENT ASSASSIN'
+          : !s.compromised && s.nonTargetKills === 0 ? 'PROFESSIONAL'
+            : s.nonTargetKills > 5 ? 'MASSACRE' : 'MESSY';
+  };
   C.resolve = function (G, loadoutIds) {
     const D = C.data, m = G.mission, camp = D.campaign, s = G.stats, out = { lines: [], gained: [], lost: [], success: G.over.success, reason: G.over.reason };
     const terr = camp && camp.territories.find((t) => t.id === m.territory);
     D.stats.missions++;
     const died = !G.over.success && !G.over.aborted;
-    out.rating = !G.over.success ? null
-      : SC.OBJECTIVES.silent.test(s) && s.kos === 0 && s.disguiseChanges === 0 ? 'GHOST'
-        : SC.OBJECTIVES.silent.test(s) ? 'SILENT ASSASSIN'
-          : !s.compromised && s.nonTargetKills === 0 ? 'PROFESSIONAL'
-            : s.nonTargetKills > 5 ? 'MASSACRE' : 'MESSY';
+    out.rating = C.rate(G);
     const brought = loadoutIds.filter((id) => D.weapons.includes(id));
     if (G.over.success) {
       D.stats.success++;

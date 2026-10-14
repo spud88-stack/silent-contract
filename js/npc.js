@@ -201,6 +201,7 @@
   // ------------------------------------------------------------------ speech + knowledge
   AI.say = function (n, text, dur, fact) {
     if (!text) return;
+    if (n.armed && G.P.inv && G.P.inv.some((i) => i.id === 'radio') && G.hear && /unit|suspect|spotted|search|clear|check|lost them|copy|backup|camera|look into/i.test(text)) G.hear(n, text, false, true);
     G.bubble(n, text, dur || clamp(1.6 + text.length * 0.055, 2, 6));
     if (fact && dist(n.x, n.y, G.P.x, G.P.y) < 130) G.addIntel(fact, 'Overheard');
   };
@@ -212,6 +213,7 @@
   AI.learn = function (n, f, direct) {
     if (!f || n.facts.has(f.id) || n.state === 'dead' || n.state === 'ko') return false;
     n.facts.set(f.id, f);
+    if (f.fromPlayer && G.rumorSpread) G.rumorSpread(f, n);
     if (f.kind === 'suspect') n.hostileKinds.add(f.outfit);
     else if (f.kind === 'liar') n.wary.add(f.outfit);
     else if (f.kind === 'rumor' && f.room != null && !direct && n.state === 'routine' && !n.isTarget && !n.post) {
@@ -222,7 +224,16 @@
     }
     return true;
   };
-  AI.shareable = (n, o) => { for (const f of n.facts.values()) if (!f.priv && !o.facts.has(f.id)) return f; return null; };
+  // fresh rumors are the juiciest thing to pass on; gossips can't keep them in
+  AI.shareable = (n, o) => {
+    let best = null;
+    for (const f of n.facts.values()) {
+      if (f.priv || o.facts.has(f.id)) continue;
+      if (f.kind === 'rumor') return f;
+      if (!best) best = f;
+    }
+    return best;
+  };
 
   // ------------------------------------------------------------------ movement
   function setPath(n, tx, ty) {
@@ -429,6 +440,7 @@
   // ------------------------------------------------------------------ death / KO
   function drop(n) {
     if (n.armed && !n.dropped) G.dropItem('pistol', n.x + 6, n.y + 4, { n: 6 });
+    if (n.kind === 'guard' && !n.dropped && !G.items.some((i) => i.id === 'radio') && !G.P.inv.some((i) => i.id === 'radio')) G.dropItem('radio', n.x - 6, n.y - 2);
     if (n.hasKeycard) { G.dropItem('keycard', n.x - 6, n.y + 5); n.hasKeycard = false; }
     if (n.courier && !n.dropped) G.dropItem('package', n.x - 5, n.y - 3);
     n.dropped = true;
@@ -551,7 +563,7 @@
         toState(n, 'routine');
       }
     },
-    talk(n, dt) { face(n, G.P.x, G.P.y, dt); if (!G.dialog || G.dialog.npc !== n) n.state = 'routine'; },
+    talk(n, dt) { if (!(G.dialog && G.dialog.mode === 'phone')) face(n, G.P.x, G.P.y, dt); if (!G.dialog || G.dialog.npc !== n) n.state = 'routine'; },
     challenge(n, dt) {
       const P = G.P;
       n.lostT = n.sees ? 0 : n.lostT + dt;
